@@ -1,5 +1,5 @@
 "use client";
-import { BarChart3, ChevronDown, CreditCard, LayoutDashboard, LogOut, Settings, UsersRound, WalletCards } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, ChevronDown, CreditCard, LayoutDashboard, LogOut, Settings, UsersRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/crm", label: "CRM", icon: UsersRound },
+  { href: "/client-management", label: "Client Management", icon: BriefcaseBusiness },
   { href: "/invoices", label: "Invoice", icon: CreditCard },
   { href: "/finance", label: "Keuangan", icon: WalletCards },
   { href: "/reports", label: "Laporan", icon: BarChart3 },
