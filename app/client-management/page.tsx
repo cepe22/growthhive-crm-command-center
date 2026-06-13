@@ -27,6 +27,7 @@ export default function ClientManagementPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ContractStatus | "">("");
   const [editing, setEditing] = useState<ManagedClient | null>(null);
+  const [editProjects, setEditProjects] = useState<ManagedClient["projects"]>([]);
   useEffect(() => {
     const stored = localStorage.getItem("gh-managed-clients");
     if (stored) setClients(JSON.parse(stored));
@@ -62,11 +63,17 @@ export default function ClientManagementPage() {
     const data = new FormData(event.currentTarget);
     save(clients.map((client) => client.brand === editing.brand ? {
       ...client,
+      projects: editProjects.filter((project) => project.scope.trim()),
       contractPeriod: String(data.get("contractPeriod")),
       status: String(data.get("status")) as ContractStatus,
       notes: String(data.get("notes")),
     } : client));
     setEditing(null);
+  }
+
+  function startEditing(client: ManagedClient) {
+    setEditing(client);
+    setEditProjects(client.projects.map((project) => ({ ...project })));
   }
 
   function removeClient(client: ManagedClient) {
@@ -149,7 +156,7 @@ export default function ClientManagementPage() {
                     <td className="max-w-xs p-4 text-xs leading-5 text-slate-500">{client.notes || "-"}</td>
                     <td className="p-4">
                       <div className="flex gap-1">
-                        <button onClick={() => setEditing(client)} title="Edit kontrak" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button>
+                        <button onClick={() => startEditing(client)} title="Edit kontrak" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button>
                         <button onClick={() => removeClient(client)} title="Hapus client" className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950"><Trash2 size={14} /></button>
                       </div>
                     </td>
@@ -166,6 +173,19 @@ export default function ClientManagementPage() {
       </p>
       <Modal open={Boolean(editing)} title={`Edit Kontrak · ${editing?.brand || ""}`} onClose={() => setEditing(null)}>
         {editing && <form onSubmit={updateContract} className="space-y-4">
+          <div>
+            <div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold">Scope & fee bulanan</span><button type="button" onClick={() => setEditProjects((items) => [...items, { scope: "", monthlyFee: 0 }])} className="text-xs font-bold text-teal-700">+ Tambah scope</button></div>
+            <div className="space-y-3">
+              {editProjects.map((project, index) => <div key={index} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className="grid gap-2 md:grid-cols-[1fr_140px_auto]">
+                  <input value={project.scope} onChange={(event) => setEditProjects((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, scope: event.target.value } : item))} className={fieldClass} placeholder="Nama scope" />
+                  <input value={project.monthlyFee || ""} onChange={(event) => setEditProjects((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, monthlyFee: Number(event.target.value) || undefined } : item))} type="number" min="0" className={fieldClass} placeholder="Fee" />
+                  <button type="button" onClick={() => setEditProjects((items) => items.filter((_, itemIndex) => itemIndex !== index))} title="Hapus scope" className="grid h-11 w-11 place-items-center rounded-xl border border-rose-200 text-rose-500"><Trash2 size={15} /></button>
+                </div>
+                <input value={project.feeNote || ""} onChange={(event) => setEditProjects((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, feeNote: event.target.value || undefined } : item))} className={`${fieldClass} mt-2`} placeholder="Catatan fee variable, opsional" />
+              </div>)}
+            </div>
+          </div>
           <label><span className="mb-2 block text-xs font-bold">Durasi / masa kontrak berjalan</span><input name="contractPeriod" defaultValue={editing.contractPeriod || ""} className={fieldClass} placeholder="Contoh: Jul - Des 2026" /></label>
           <label><span className="mb-2 block text-xs font-bold">Status kontrak</span><select name="status" defaultValue={editing.status} className={fieldClass}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label><span className="mb-2 block text-xs font-bold">Notes</span><textarea name="notes" defaultValue={editing.notes || ""} rows={4} className={`${fieldClass} h-auto py-3`} /></label>
