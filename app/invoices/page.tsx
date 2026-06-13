@@ -6,17 +6,92 @@ import { Header } from "@/components/header";
 import { fieldClass, Modal } from "@/components/modal";
 import { Badge, Button, Card } from "@/components/ui";
 import type { Invoice } from "@/lib/data";
+import { generateInvoiceNumber } from "@/lib/invoice-number";
 import { rupiah } from "@/lib/utils";
 import { CircleDollarSign, Clock3, FileText, Filter, Plus } from "lucide-react";
+import dynamic from "next/dynamic";
 import { FormEvent, useState } from "react";
+
+const InvoiceDownloadButton = dynamic(() => import("@/components/invoice-download-button"), { ssr: false });
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function InvoicesPage() {
   const { invoices, addInvoice } = useAppData();
-  const [open, setOpen] = useState(false); const [status, setStatus] = useState("");
-  const shown = invoices.filter(i => !status || i.status === status);
-  const paid = invoices.filter(i => i.status === "Lunas").reduce((sum,i) => sum + i.amount, 0);
-  const total = invoices.reduce((sum,i) => sum + i.amount, 0);
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); addInvoice({ id: crypto.randomUUID(), no: String(data.get("no")), client: String(data.get("client")), date: String(data.get("date")), due: String(data.get("due")), amount: Number(data.get("amount")), status: String(data.get("status")) as Invoice["status"] }); setOpen(false); }
-  return <><Header title="Invoice" subtitle="Buat, kirim, dan pantau pembayaran invoice."/><div className="mb-5 flex justify-end gap-2"><div className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-900"><Filter size={15}/><select value={status} onChange={e => setStatus(e.target.value)} className="bg-transparent text-sm outline-none"><option value="">Semua status</option>{["Draft","Terkirim","Lunas","Jatuh Tempo"].map(x => <option key={x}>{x}</option>)}</select></div><Button onClick={() => setOpen(true)}><Plus size={16}/>Buat Invoice</Button></div><section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[{ l: "Total Invoice", v: rupiah(total), i: FileText }, { l: "Sudah Terbayar", v: rupiah(paid), i: CircleDollarSign }, { l: "Belum Terbayar", v: rupiah(total-paid), i: Clock3 }, { l: "Jatuh Tempo", v: `${invoices.filter(i=>i.status==="Jatuh Tempo").length} Invoice`, i: Clock3 }].map(({ l,v,i:Icon }) => <Card className="p-5" key={l}><div className="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700"><Icon size={19}/></div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">{l}</p><p className="mt-2 text-xl font-black text-ink dark:text-white">{v}</p></Card>)}</section><Card className="mt-5 overflow-hidden"><div className="p-5"><h2 className="font-black">Semua Invoice</h2></div>{!shown.length ? <EmptyState title="Belum ada invoice" description="Buat invoice pertama untuk mulai melacak tagihan dan pembayaran."/> : <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-400 dark:bg-slate-800"><tr>{["Nomor","Klien","Dibuat","Jatuh Tempo","Jumlah","Status"].map(x => <th className="p-4" key={x}>{x}</th>)}</tr></thead><tbody>{shown.map(i => <tr className="border-t border-slate-100 dark:border-slate-800" key={i.id}><td className="p-4 font-bold text-teal-700">{i.no}</td><td className="p-4 font-semibold">{i.client}</td><td className="p-4">{i.date}</td><td className="p-4">{i.due}</td><td className="p-4 font-bold">{rupiah(i.amount)}</td><td className="p-4"><Badge tone={i.status === "Lunas" ? "teal" : i.status === "Jatuh Tempo" ? "red" : "amber"}>{i.status}</Badge></td></tr>)}</tbody></table></div>}</Card>
-  <Modal open={open} title="Buat Invoice" onClose={() => setOpen(false)}><form onSubmit={submit} className="grid gap-4 md:grid-cols-2">{[["Nomor invoice","no","text"],["Klien","client","text"],["Tanggal invoice","date","date"],["Jatuh tempo","due","date"],["Jumlah","amount","number"]].map(([label,name,type]) => <label key={name}><span className="mb-2 block text-xs font-bold">{label}</span><input name={name} type={type} required className={fieldClass}/></label>)}<label><span className="mb-2 block text-xs font-bold">Status</span><select name="status" className={fieldClass}>{["Draft","Terkirim","Lunas","Jatuh Tempo"].map(x => <option key={x}>{x}</option>)}</select></label><Button className="md:col-span-2">Simpan Invoice</Button></form></Modal></>;
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(today());
+  const shown = invoices.filter((invoice) => !status || invoice.status === status);
+  const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
+  const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+  const nextNumber = generateInvoiceNumber(invoices, invoiceDate);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    addInvoice({
+      id: crypto.randomUUID(),
+      no: nextNumber,
+      client: String(data.get("client")),
+      date: invoiceDate,
+      due: String(data.get("due")),
+      amount: Number(data.get("amount")),
+      description: String(data.get("description")),
+      discount: Number(data.get("discount")) || 0,
+      taxRate: Number(data.get("taxRate")) || 0,
+      status: String(data.get("status")) as Invoice["status"],
+    });
+    setOpen(false);
+  }
+
+  return (
+    <>
+      <Header title="Invoice" subtitle="Buat, unduh PDF, dan pantau pembayaran invoice." />
+      <div className="mb-5 flex justify-end gap-2">
+        <div className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-900">
+          <Filter size={15} />
+          <select value={status} onChange={(event) => setStatus(event.target.value)} className="bg-transparent text-sm outline-none">
+            <option value="">Semua status</option>
+            {["Draft", "Terkirim", "Lunas", "Jatuh Tempo"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+        </div>
+        <Button onClick={() => setOpen(true)}><Plus size={16} />Buat Invoice</Button>
+      </div>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Total Invoice", value: rupiah(total), icon: FileText },
+          { label: "Sudah Terbayar", value: rupiah(paid), icon: CircleDollarSign },
+          { label: "Belum Terbayar", value: rupiah(total - paid), icon: Clock3 },
+          { label: "Jatuh Tempo", value: `${invoices.filter((invoice) => invoice.status === "Jatuh Tempo").length} Invoice`, icon: Clock3 },
+        ].map(({ label, value, icon: Icon }) => <Card className="p-5" key={label}><div className="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700"><Icon size={19} /></div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-xl font-black text-ink dark:text-white">{value}</p></Card>)}
+      </section>
+
+      <Card className="mt-5 overflow-hidden">
+        <div className="p-5"><h2 className="font-black">Semua Invoice</h2></div>
+        {!shown.length ? <EmptyState title="Belum ada invoice" description="Buat invoice pertama untuk mulai melacak tagihan dan menghasilkan PDF." /> : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-400 dark:bg-slate-800"><tr>{["Nomor", "Klien", "Dibuat", "Jatuh Tempo", "Jumlah", "Status", "Dokumen"].map((item) => <th className="p-4" key={item}>{item}</th>)}</tr></thead>
+              <tbody>{shown.map((invoice) => <tr className="border-t border-slate-100 dark:border-slate-800" key={invoice.id}><td className="p-4 font-bold text-teal-700">{invoice.no}</td><td className="p-4 font-semibold">{invoice.client}</td><td className="p-4">{invoice.date}</td><td className="p-4">{invoice.due}</td><td className="p-4 font-bold">{rupiah(invoice.amount)}</td><td className="p-4"><Badge tone={invoice.status === "Lunas" ? "teal" : invoice.status === "Jatuh Tempo" ? "red" : "amber"}>{invoice.status}</Badge></td><td className="p-4"><InvoiceDownloadButton invoice={invoice} /></td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Modal open={open} title="Buat Invoice" onClose={() => setOpen(false)}>
+        <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+          <label><span className="mb-2 block text-xs font-bold">Nomor invoice otomatis</span><input value={nextNumber} readOnly className={`${fieldClass} bg-slate-50 font-bold text-teal-700 dark:bg-slate-800`} /></label>
+          <label><span className="mb-2 block text-xs font-bold">Klien</span><input name="client" required className={fieldClass} /></label>
+          <label><span className="mb-2 block text-xs font-bold">Tanggal invoice</span><input name="date" type="date" required value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} className={fieldClass} /></label>
+          <label><span className="mb-2 block text-xs font-bold">Jatuh tempo</span><input name="due" type="date" required className={fieldClass} /></label>
+          <label className="md:col-span-2"><span className="mb-2 block text-xs font-bold">Deskripsi pekerjaan</span><textarea name="description" required rows={3} className={`${fieldClass} h-auto py-3`} placeholder="Contoh: Marketing Consulting Juni 2026, untuk cabang BTC" /></label>
+          <label><span className="mb-2 block text-xs font-bold">Subtotal</span><input name="amount" type="number" required min="0" className={fieldClass} /></label>
+          <label><span className="mb-2 block text-xs font-bold">Diskon</span><input name="discount" type="number" min="0" defaultValue="0" className={fieldClass} /></label>
+          <label><span className="mb-2 block text-xs font-bold">Tax rate (%)</span><input name="taxRate" type="number" min="0" step="0.01" defaultValue="0" className={fieldClass} /></label>
+          <label><span className="mb-2 block text-xs font-bold">Status</span><select name="status" className={fieldClass}>{["Draft", "Terkirim", "Lunas", "Jatuh Tempo"].map((item) => <option key={item}>{item}</option>)}</select></label>
+          <Button className="md:col-span-2">Simpan & Siapkan PDF</Button>
+        </form>
+      </Modal>
+    </>
+  );
 }

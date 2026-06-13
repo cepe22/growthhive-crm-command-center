@@ -1,17 +1,17 @@
 "use client";
 
 import { Header } from "@/components/header";
+import { fieldClass, Modal } from "@/components/modal";
 import { Badge, Button, Card } from "@/components/ui";
 import {
-  activeProjectCount,
   clientContractSource,
-  knownMonthlyFee,
   managedClients,
   type ContractStatus,
+  type ManagedClient,
 } from "@/lib/client-projects";
 import { rupiah } from "@/lib/utils";
-import { AlertTriangle, BriefcaseBusiness, CalendarClock, ExternalLink, Search, WalletCards } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, BriefcaseBusiness, CalendarClock, ExternalLink, Pencil, Search, Trash2, WalletCards } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 const statuses: ContractStatus[] = ["Aktif", "Bulanan", "Perlu diperbarui", "Periode belum diisi"];
 
@@ -23,11 +23,21 @@ const tone = (status: ContractStatus) => {
 };
 
 export default function ClientManagementPage() {
+  const [clients, setClients] = useState<ManagedClient[]>(managedClients);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ContractStatus | "">("");
+  const [editing, setEditing] = useState<ManagedClient | null>(null);
+  useEffect(() => {
+    const stored = localStorage.getItem("gh-managed-clients");
+    if (stored) setClients(JSON.parse(stored));
+  }, []);
+  const save = (next: ManagedClient[]) => {
+    setClients(next);
+    localStorage.setItem("gh-managed-clients", JSON.stringify(next));
+  };
   const filtered = useMemo(
     () =>
-      managedClients.filter(
+      clients.filter(
         (client) =>
           (!status || client.status === status) &&
           (!query ||
@@ -35,11 +45,34 @@ export default function ClientManagementPage() {
               .toLowerCase()
               .includes(query.toLowerCase())),
       ),
-    [query, status],
+    [clients, query, status],
   );
-  const needsAttention = managedClients.filter(
+  const needsAttention = clients.filter(
     (client) => client.status === "Perlu diperbarui" || client.status === "Periode belum diisi",
   ).length;
+  const activeProjectCount = clients.reduce((total, client) => total + client.projects.length, 0);
+  const knownMonthlyFee = clients.reduce(
+    (total, client) => total + client.projects.reduce((sum, project) => sum + (project.monthlyFee || 0), 0),
+    0,
+  );
+
+  function updateContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+    const data = new FormData(event.currentTarget);
+    save(clients.map((client) => client.brand === editing.brand ? {
+      ...client,
+      contractPeriod: String(data.get("contractPeriod")),
+      status: String(data.get("status")) as ContractStatus,
+      notes: String(data.get("notes")),
+    } : client));
+    setEditing(null);
+  }
+
+  function removeClient(client: ManagedClient) {
+    if (!window.confirm(`Hapus ${client.brand} dari Client Management?`)) return;
+    save(clients.filter((item) => item.brand !== client.brand));
+  }
 
   return (
     <>
@@ -50,7 +83,7 @@ export default function ClientManagementPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "On-going Client", value: String(managedClients.length), icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
+          { label: "On-going Client", value: String(clients.length), icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
           { label: "Project / Scope Aktif", value: String(activeProjectCount), icon: CalendarClock, color: "bg-sky-50 text-sky-700" },
           { label: "Known Monthly Fee", value: rupiah(knownMonthlyFee), icon: WalletCards, color: "bg-emerald-50 text-emerald-700" },
           { label: "Perlu Perhatian", value: String(needsAttention), icon: AlertTriangle, color: "bg-amber-50 text-amber-700" },
@@ -92,7 +125,7 @@ export default function ClientManagementPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-400 dark:bg-slate-800">
-              <tr>{["Client", "Scope & Fee", "Total Fee / Bulan", "Masa Kontrak", "Status", "Notes"].map((label) => <th key={label} className="p-4">{label}</th>)}</tr>
+              <tr>{["Client", "Scope & Fee", "Total Fee / Bulan", "Masa Kontrak", "Status", "Notes", "Admin"].map((label) => <th key={label} className="p-4">{label}</th>)}</tr>
             </thead>
             <tbody>
               {filtered.map((client) => {
@@ -114,6 +147,12 @@ export default function ClientManagementPage() {
                     <td className="p-4 text-slate-500">{client.contractPeriod || "Belum diisi"}</td>
                     <td className="p-4"><Badge tone={tone(client.status)}>{client.status}</Badge></td>
                     <td className="max-w-xs p-4 text-xs leading-5 text-slate-500">{client.notes || "-"}</td>
+                    <td className="p-4">
+                      <div className="flex gap-1">
+                        <button onClick={() => setEditing(client)} title="Edit kontrak" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button>
+                        <button onClick={() => removeClient(client)} title="Hapus client" className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950"><Trash2 size={14} /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -125,6 +164,15 @@ export default function ClientManagementPage() {
       <p className="mt-3 text-xs text-slate-400">
         Known monthly fee hanya menghitung fee nominal yang tercatat. Skema persentase dan fee yang belum diisi tidak termasuk.
       </p>
+      <Modal open={Boolean(editing)} title={`Edit Kontrak · ${editing?.brand || ""}`} onClose={() => setEditing(null)}>
+        {editing && <form onSubmit={updateContract} className="space-y-4">
+          <label><span className="mb-2 block text-xs font-bold">Durasi / masa kontrak berjalan</span><input name="contractPeriod" defaultValue={editing.contractPeriod || ""} className={fieldClass} placeholder="Contoh: Jul - Des 2026" /></label>
+          <label><span className="mb-2 block text-xs font-bold">Status kontrak</span><select name="status" defaultValue={editing.status} className={fieldClass}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label><span className="mb-2 block text-xs font-bold">Notes</span><textarea name="notes" defaultValue={editing.notes || ""} rows={4} className={`${fieldClass} h-auto py-3`} /></label>
+          <p className="text-xs text-slate-400">Perubahan admin disimpan pada browser ini.</p>
+          <Button className="w-full">Simpan Perubahan</Button>
+        </form>}
+      </Modal>
     </>
   );
 }

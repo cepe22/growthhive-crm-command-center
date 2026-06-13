@@ -27,6 +27,9 @@ export type Invoice = {
   date: string;
   due: string;
   amount: number;
+  description?: string;
+  discount?: number;
+  taxRate?: number;
   status: "Draft" | "Terkirim" | "Lunas" | "Jatuh Tempo";
 };
 
