@@ -10,7 +10,16 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`. Without Supabase credentials, the interface uses realistic demo data.
+Open `http://localhost:3000`. Until Supabase credentials are configured, the application starts empty and stores newly created records in the current browser.
+
+The current temporary login is:
+
+```text
+Email: christopher@growthhive.id
+Password: GrowthHive2026!
+```
+
+Set `TEMP_LOGIN_EMAIL`, `TEMP_LOGIN_PASSWORD`, and a long random `AUTH_SESSION_SECRET` in Vercel before production use. Until Supabase is connected, newly created CRM, invoice, and finance records are stored only in the current browser.
 
 ## Supabase setup
 
