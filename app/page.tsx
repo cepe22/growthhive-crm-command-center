@@ -1,0 +1,21 @@
+import { Header } from "@/components/header";
+import { Badge, Card } from "@/components/ui";
+import { DashboardChart } from "@/components/dashboard-chart";
+import { clients, invoices, stages } from "@/lib/data";
+import { rupiah } from "@/lib/utils";
+import { ArrowUpRight, BriefcaseBusiness, CircleDollarSign, Clock3, CreditCard, MoreHorizontal } from "lucide-react";
+
+export default function Dashboard() {
+  const stats = [
+    { label: "Klien Aktif", value: "12", note: "+2 bulan ini", icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
+    { label: "Invoice Bulan Ini", value: rupiah(33500000), note: "+18,5% dari Mei", icon: CreditCard, color: "bg-sky-50 text-sky-700" },
+    { label: "Total Terbayar", value: rupiah(22000000), note: "65,7% terkumpul", icon: CircleDollarSign, color: "bg-emerald-50 text-emerald-700" },
+    { label: "Belum Terbayar", value: rupiah(33500000), note: "1 jatuh tempo", icon: Clock3, color: "bg-amber-50 text-amber-700" },
+  ];
+  return <><Header title="Selamat pagi, Christopher" subtitle="Berikut ringkasan bisnis GrowthHive hari ini."/>
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{stats.map(({ label, value, note, icon: Icon, color }) => <Card key={label} className="p-5"><div className="mb-5 flex items-start justify-between"><div className={`grid h-11 w-11 place-items-center rounded-xl ${color}`}><Icon size={20}/></div><button><MoreHorizontal size={18} className="text-slate-300"/></button></div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-xl font-black tracking-tight text-ink dark:text-white">{value}</p><p className="mt-2 flex items-center gap-1 text-xs text-slate-400"><ArrowUpRight size={13} className="text-teal-600"/>{note}</p></Card>)}</section>
+    <section className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr]"><Card className="p-5"><div className="mb-3 flex items-center justify-between"><div><h2 className="font-black text-ink dark:text-white">Tren Pendapatan</h2><p className="text-xs text-slate-400">Pendapatan enam bulan terakhir</p></div><Badge>2026</Badge></div><DashboardChart/></Card>
+    <Card className="p-5"><div className="mb-5 flex items-center justify-between"><div><h2 className="font-black text-ink dark:text-white">Ringkasan Pipeline</h2><p className="text-xs text-slate-400">Prospek berdasarkan tahap</p></div><span className="text-xs font-bold text-teal-600">Lihat CRM</span></div><div className="space-y-4">{stages.slice(0, 5).map((stage, i) => { const count = clients.filter(c => c.stage === stage).length; return <div key={stage}><div className="mb-1.5 flex justify-between text-xs"><span className="font-semibold">{stage}</span><span className="font-bold text-slate-400">{count}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-teal-600" style={{ width: `${Math.max(12, count * 27)}%`, opacity: 1 - i * .1 }}/></div></div>})}</div></Card></section>
+    <Card className="mt-5 overflow-hidden"><div className="flex items-center justify-between p-5"><div><h2 className="font-black text-ink dark:text-white">Invoice Terbaru</h2><p className="text-xs text-slate-400">Pantau status pembayaran klien</p></div><span className="text-xs font-bold text-teal-600">Lihat semua</span></div><div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400 dark:bg-slate-800/50"><tr>{["Nomor Invoice","Klien","Tanggal","Jatuh Tempo","Jumlah","Status"].map(x => <th className="px-5 py-3" key={x}>{x}</th>)}</tr></thead><tbody>{invoices.map(i => <tr className="border-t border-slate-100 dark:border-slate-800" key={i.no}><td className="px-5 py-4 font-bold text-teal-700">{i.no}</td><td className="px-5 py-4 font-semibold">{i.client}</td><td className="px-5 py-4 text-slate-500">{i.date}</td><td className="px-5 py-4 text-slate-500">{i.due}</td><td className="px-5 py-4 font-bold">{rupiah(i.amount)}</td><td className="px-5 py-4"><Badge tone={i.status === "Lunas" ? "teal" : i.status === "Jatuh Tempo" ? "red" : "amber"}>{i.status}</Badge></td></tr>)}</tbody></table></div></Card>
+  </>;
+}
