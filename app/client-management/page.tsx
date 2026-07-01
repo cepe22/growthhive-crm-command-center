@@ -1,17 +1,17 @@
 "use client";
 
+import { useAppData } from "@/components/app-data";
 import { Header } from "@/components/header";
 import { fieldClass, Modal } from "@/components/modal";
 import { Badge, Button, Card } from "@/components/ui";
 import {
   clientContractSource,
-  managedClients,
   type ContractStatus,
   type ManagedClient,
 } from "@/lib/client-projects";
 import { rupiah } from "@/lib/utils";
 import { AlertTriangle, BriefcaseBusiness, CalendarClock, ExternalLink, Pencil, Search, Trash2, WalletCards } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 const statuses: ContractStatus[] = ["Aktif", "Bulanan", "Perlu diperbarui", "Periode belum diisi"];
 
@@ -23,19 +23,11 @@ const tone = (status: ContractStatus) => {
 };
 
 export default function ClientManagementPage() {
-  const [clients, setClients] = useState<ManagedClient[]>(managedClients);
+  const { managedClients: clients, saveManagedClients } = useAppData();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ContractStatus | "">("");
   const [editing, setEditing] = useState<ManagedClient | null>(null);
   const [editProjects, setEditProjects] = useState<ManagedClient["projects"]>([]);
-  useEffect(() => {
-    const stored = localStorage.getItem("gh-managed-clients");
-    if (stored) setClients(JSON.parse(stored));
-  }, []);
-  const save = (next: ManagedClient[]) => {
-    setClients(next);
-    localStorage.setItem("gh-managed-clients", JSON.stringify(next));
-  };
   const filtered = useMemo(
     () =>
       clients.filter(
@@ -61,7 +53,7 @@ export default function ClientManagementPage() {
     event.preventDefault();
     if (!editing) return;
     const data = new FormData(event.currentTarget);
-    save(clients.map((client) => client.brand === editing.brand ? {
+    saveManagedClients(clients.map((client) => client.brand === editing.brand ? {
       ...client,
       projects: editProjects.filter((project) => project.scope.trim()),
       contractPeriod: String(data.get("contractPeriod")),
@@ -78,7 +70,7 @@ export default function ClientManagementPage() {
 
   function removeClient(client: ManagedClient) {
     if (!window.confirm(`Hapus ${client.brand} dari Client Management?`)) return;
-    save(clients.filter((item) => item.brand !== client.brand));
+    saveManagedClients(clients.filter((item) => item.brand !== client.brand));
   }
 
   return (

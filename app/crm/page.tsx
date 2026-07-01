@@ -18,6 +18,7 @@ import {
   List,
   MailCheck,
   MessageSquareText,
+  Pencil,
   Plus,
   Search,
   SlidersHorizontal,
@@ -44,17 +45,26 @@ const priorityTone: Record<NonNullable<Client["priority"]>, "red" | "amber" | "s
   Low: "slate",
 };
 
+const serviceOptions = [
+  "Social media production",
+  "Consultation",
+  "Shopee ads growth",
+  "Tiktok ads growth",
+  "Meta ads growth",
+];
+
 function formatDate(value?: string) {
   if (!value) return "Belum dijadwalkan";
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(new Date(value));
 }
 
 export default function CRMPage() {
-  const { clients, addClient, moveClient } = useAppData();
+  const { clients, addClient, updateClient, moveClient } = useAppData();
   const [view, setView] = useState<"pipeline" | "list">("pipeline");
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState("");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Client | null>(null);
   const filtered = clients.filter((client) => {
     const haystack = `${client.brand} ${client.pic} ${client.service} ${client.industry}`.toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!industry || client.industry === industry);
@@ -71,12 +81,18 @@ export default function CRMPage() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    addClient({
-      id: crypto.randomUUID(),
+    const selectedServices = data.getAll("services").map(String);
+    if (!selectedServices.length) {
+      window.alert("Pilih minimal satu layanan / project.");
+      return;
+    }
+    const client: Client = {
+      id: editing?.id || crypto.randomUUID(),
       brand: String(data.get("brand")),
       pic: String(data.get("pic")),
       industry: String(data.get("industry")),
-      service: String(data.get("service")),
+      service: selectedServices.join(", "),
+      services: selectedServices,
       stage: String(data.get("stage")) as Client["stage"],
       value: Number(data.get("value")) || 0,
       source: String(data.get("source")),
@@ -86,8 +102,21 @@ export default function CRMPage() {
       nextAction: String(data.get("nextAction")),
       dueDate: String(data.get("dueDate")),
       health: String(data.get("health")) as Client["health"],
-    });
+    };
+    if (editing) updateClient(editing.id, client);
+    else addClient(client);
     setOpen(false);
+    setEditing(null);
+  }
+
+  function openCreateModal() {
+    setEditing(null);
+    setOpen(true);
+  }
+
+  function openEditModal(client: Client) {
+    setEditing(client);
+    setOpen(true);
   }
 
   return (
@@ -103,7 +132,7 @@ export default function CRMPage() {
               </div>
               <h2 className="text-xl font-black tracking-tight text-ink dark:text-white">Journey revenue GH</h2>
             </div>
-            <Button onClick={() => setOpen(true)}>
+            <Button onClick={openCreateModal}>
               <Plus size={16} /> Tambah Deal
             </Button>
           </div>
@@ -204,7 +233,10 @@ export default function CRMPage() {
                             <h4 className="truncate text-sm font-black">{client.brand}</h4>
                             <p className="truncate text-[11px] text-slate-400">{client.pic}</p>
                           </div>
-                          <Badge tone={priorityTone[client.priority ?? "Medium"]}>{client.priority ?? "Medium"}</Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge tone={priorityTone[client.priority ?? "Medium"]}>{client.priority ?? "Medium"}</Badge>
+                            <button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={13} /></button>
+                          </div>
                         </div>
                         <p className="line-clamp-2 min-h-8 text-xs text-slate-500 dark:text-slate-300">{client.service || "Service belum dipilih"}</p>
                         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
@@ -223,7 +255,7 @@ export default function CRMPage() {
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
                 <tr>
-                  {["Brand", "Journey", "PIC", "Project Value", "Forecast", "Next Action", "Owner", "Health"].map((item) => (
+                  {["Brand", "Journey", "PIC", "Project Value", "Forecast", "Next Action", "Owner", "Health", "Admin"].map((item) => (
                     <th key={item} className="px-4 py-3 font-black">{item}</th>
                   ))}
                 </tr>
@@ -245,6 +277,7 @@ export default function CRMPage() {
                     </td>
                     <td className="px-4 py-4"><span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-xs font-black text-white">{client.owner || "GH"}</span></td>
                     <td className="px-4 py-4"><HealthBadge health={client.health} /></td>
+                    <td className="px-4 py-4"><button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -296,12 +329,11 @@ export default function CRMPage() {
         </Card>
       </section>
 
-      <Modal open={open} title="Tambah Deal CRM" onClose={() => setOpen(false)}>
+      <Modal open={open} title={editing ? `Edit Deal · ${editing.brand}` : "Tambah Deal CRM"} onClose={() => { setOpen(false); setEditing(null); }}>
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
           {[
             ["Brand", "brand", "text"],
             ["Nama PIC", "pic", "text"],
-            ["Layanan / project", "service", "text"],
             ["Nilai project", "value", "number"],
             ["Source", "source", "text"],
             ["Owner", "owner", "text"],
@@ -310,30 +342,44 @@ export default function CRMPage() {
           ].map(([label, name, type]) => (
             <label key={name}>
               <span className="mb-2 block text-xs font-bold">{label}</span>
-              <input name={name} required={["brand", "pic", "service"].includes(name)} type={type} min={name === "probability" ? 0 : undefined} max={name === "probability" ? 100 : undefined} className={fieldClass} />
+              <input name={name} defaultValue={editing?.[name as keyof Client] as string | number | undefined || ""} required={["brand", "pic"].includes(name)} type={type} min={name === "probability" ? 0 : undefined} max={name === "probability" ? 100 : undefined} className={fieldClass} />
             </label>
           ))}
+          <div className="md:col-span-2">
+            <span className="mb-2 block text-xs font-bold">Layanan / project</span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {serviceOptions.map((service) => {
+                const selected = editing?.services?.length ? editing.services : editing?.service ? editing.service.split(",").map((item) => item.trim()) : [];
+                return (
+                  <label key={service} className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 px-3 text-sm font-semibold dark:border-slate-700">
+                    <input name="services" type="checkbox" value={service} defaultChecked={selected.includes(service)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                    <span>{service}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
           <label>
             <span className="mb-2 block text-xs font-bold">Industri</span>
-            <select name="industry" className={fieldClass}>{industries.map((item) => <option key={item}>{item}</option>)}</select>
+            <select name="industry" defaultValue={editing?.industry || industries[0]} className={fieldClass}>{industries.map((item) => <option key={item}>{item}</option>)}</select>
           </label>
           <label>
             <span className="mb-2 block text-xs font-bold">Journey Stage</span>
-            <select name="stage" className={fieldClass}>{stages.map((item) => <option key={item}>{item}</option>)}</select>
+            <select name="stage" defaultValue={editing?.stage || stages[0]} className={fieldClass}>{stages.map((item) => <option key={item}>{item}</option>)}</select>
           </label>
           <label>
             <span className="mb-2 block text-xs font-bold">Priority</span>
-            <select name="priority" className={fieldClass}>{["High", "Medium", "Low"].map((item) => <option key={item}>{item}</option>)}</select>
+            <select name="priority" defaultValue={editing?.priority || "Medium"} className={fieldClass}>{["High", "Medium", "Low"].map((item) => <option key={item}>{item}</option>)}</select>
           </label>
           <label>
             <span className="mb-2 block text-xs font-bold">Health</span>
-            <select name="health" className={fieldClass}>{["Green", "Amber", "Red"].map((item) => <option key={item}>{item}</option>)}</select>
+            <select name="health" defaultValue={editing?.health || "Green"} className={fieldClass}>{["Green", "Amber", "Red"].map((item) => <option key={item}>{item}</option>)}</select>
           </label>
           <label className="md:col-span-2">
             <span className="mb-2 block text-xs font-bold">Tanggal follow-up</span>
-            <input name="dueDate" type="date" className={fieldClass} />
+            <input name="dueDate" defaultValue={editing?.dueDate || ""} type="date" className={fieldClass} />
           </label>
-          <Button className="md:col-span-2">Simpan Deal</Button>
+          <Button className="md:col-span-2">{editing ? "Update Deal" : "Simpan Deal"}</Button>
         </form>
       </Modal>
     </>

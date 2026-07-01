@@ -18,6 +18,7 @@ export type Client = {
   stage: Stage;
   value: number;
   service: string;
+  services?: string[];
   source?: string;
   priority?: "High" | "Medium" | "Low";
   probability?: number;
