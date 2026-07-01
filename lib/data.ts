@@ -18,6 +18,15 @@ export type Client = {
   stage: Stage;
   value: number;
   service: string;
+  source?: string;
+  priority?: "High" | "Medium" | "Low";
+  probability?: number;
+  owner?: string;
+  nextAction?: string;
+  dueDate?: string;
+  projectStart?: string;
+  health?: "Green" | "Amber" | "Red";
+  notes?: string;
 };
 
 export type Invoice = {
