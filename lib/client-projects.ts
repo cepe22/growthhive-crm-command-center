@@ -1,3 +1,118 @@
+export type ProjectStatus = "Backlog" | "Scheduled" | "In Progress" | "Review" | "Done";
+
+export type ProjectPriority = "High" | "Medium" | "Low";
+
+export type TeamRole =
+  | "Project Manager"
+  | "Social Media Specialist"
+  | "Content Creator"
+  | "Ads Specialist"
+  | "Designer"
+  | "Account Executive";
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: TeamRole;
+  avatar: string;
+  color: string;
+};
+
+export type ProjectTask = {
+  id: string;
+  title: string;
+  project: string;
+  client: string;
+  status: ProjectStatus;
+  assigneeId: string;
+  role: TeamRole;
+  startDate: string;
+  dueDate: string;
+  priority: ProjectPriority;
+  description?: string;
+};
+
+export type WorkPlanStatus = "Focus" | "Review" | "Blocked" | "Done";
+
+export type DailyWorkPlan = {
+  id: string;
+  userId: string;
+  date: string;
+  focus: string;
+  tasks: string;
+  blocker?: string;
+  status: WorkPlanStatus;
+};
+
+export type EventResponse = "Pending" | "Accepted" | "Declined";
+
+export type AppCalendarEvent = {
+  id: string;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  ownerId: string;
+  attendeeIds: string[];
+  meetLink?: string;
+  responses: Record<string, EventResponse>;
+};
+
+export const projectStatuses: ProjectStatus[] = ["Backlog", "Scheduled", "In Progress", "Review", "Done"];
+
+export const teamRoles: TeamRole[] = [
+  "Project Manager",
+  "Social Media Specialist",
+  "Content Creator",
+  "Ads Specialist",
+  "Designer",
+  "Account Executive",
+];
+
+export const zooAvatars = ["Lion", "Panda", "Koala", "Tiger", "Giraffe", "Penguin", "Fox", "Elephant", "Zebra", "Otter"];
+
+export const teamMembers: TeamMember[] = [
+  {
+    id: "tm-christopher",
+    name: "Christopher",
+    email: "christopher@growthhive.id",
+    role: "Project Manager",
+    avatar: "Lion",
+    color: "bg-amber-100 text-amber-800",
+  },
+  {
+    id: "tm-social",
+    name: "Social Team",
+    email: "social@growthhive.id",
+    role: "Social Media Specialist",
+    avatar: "Panda",
+    color: "bg-rose-100 text-rose-800",
+  },
+  {
+    id: "tm-creative",
+    name: "Creative Team",
+    email: "creative@growthhive.id",
+    role: "Content Creator",
+    avatar: "Koala",
+    color: "bg-sky-100 text-sky-800",
+  },
+  {
+    id: "tm-performance",
+    name: "Performance Team",
+    email: "performance@growthhive.id",
+    role: "Ads Specialist",
+    avatar: "Tiger",
+    color: "bg-violet-100 text-violet-800",
+  },
+];
+
+export const projectTasks: ProjectTask[] = [];
+
+export const dailyWorkPlans: DailyWorkPlan[] = [];
+
+export const appCalendarEvents: AppCalendarEvent[] = [];
+
 export type ContractStatus = "Aktif" | "Bulanan" | "Perlu diperbarui" | "Periode belum diisi";
 
 export type ClientProject = {
@@ -14,103 +129,7 @@ export type ManagedClient = {
   notes?: string;
 };
 
-export const clientContractSource =
-  "https://docs.google.com/spreadsheets/d/1Ty2vlG7Uhz2IZka0t_xYjYPOcey10rL3dtVEU7ilpp8/edit";
-
-export const managedClients: ManagedClient[] = [
-  {
-    brand: "Blanche",
-    projects: [
-      { scope: "Meta Ads Management", monthlyFee: 1_500_000 },
-      { scope: "Shopee Ads Management", monthlyFee: 1_650_000 },
-    ],
-    contractPeriod: "Agt 2025 - Jan 2026",
-    status: "Perlu diperbarui",
-  },
-  {
-    brand: "MyBestie",
-    projects: [{ scope: "Shopee Ads Management", monthlyFee: 1_750_000 }],
-    contractPeriod: "Okt 2025 - Mar 2026",
-    status: "Perlu diperbarui",
-    notes: "Deposit 1 bulan",
-  },
-  {
-    brand: "Surin",
-    projects: [{ scope: "Meta Ads Management", monthlyFee: 4_500_000 }],
-    contractPeriod: "Diperbarui setiap bulan",
-    status: "Bulanan",
-  },
-  {
-    brand: "Ayam Geybok Bang Jarwo",
-    projects: [
-      { scope: "Social Media Agency", monthlyFee: 8_000_000 },
-      { scope: "Meta Ads Management", monthlyFee: 2_500_000 },
-    ],
-    contractPeriod: "Diperbarui setiap bulan",
-    status: "Bulanan",
-  },
-  {
-    brand: "Chronos Time",
-    projects: [{ scope: "Meta Ads Management", monthlyFee: 2_000_000 }],
-    contractPeriod: "Nov 2025 - Jan 2026",
-    status: "Perlu diperbarui",
-    notes: "Deposit 1 bulan",
-  },
-  {
-    brand: "Verdant Tech",
-    projects: [{ scope: "Shopee Ads Management", monthlyFee: 1_750_000 }],
-    contractPeriod: "Apr - Sep 2026",
-    status: "Aktif",
-    notes: "Deposit 1 bulan",
-  },
-  {
-    brand: "McDonat",
-    projects: [
-      { scope: "Marketing Consulting", feeNote: "5% dari net profit cabang" },
-      { scope: "Meta Ads Management" },
-    ],
-    status: "Periode belum diisi",
-  },
-  {
-    brand: "Miumi",
-    projects: [{ scope: "Shopee Ads Management", monthlyFee: 1_850_000 }],
-    status: "Periode belum diisi",
-  },
-  {
-    brand: "Sabilla",
-    projects: [{ scope: "Shopee Ads Management", monthlyFee: 1_800_000 }],
-    status: "Periode belum diisi",
-  },
-  {
-    brand: "YOUMEI",
-    projects: [{ scope: "Shopee Ads Management", monthlyFee: 2_000_000 }],
-    status: "Periode belum diisi",
-    notes: "Deposit 1 bulan; tambahan 2% total omzet, minimum Rp2 juta",
-  },
-  {
-    brand: "Geprek Bakar Melcis",
-    projects: [{ scope: "Social Media Agency", monthlyFee: 5_750_000 }],
-    status: "Periode belum diisi",
-    notes: "Deposit 1 bulan",
-  },
-  {
-    brand: "King Ayamku",
-    projects: [{ scope: "Social Media Agency", monthlyFee: 1_500_000 }],
-    status: "Periode belum diisi",
-    notes: "DP Rp750 ribu; perkiraan mulai Juli 2026",
-  },
-  {
-    brand: "Beyond Jeans",
-    projects: [{ scope: "Shopee Ads Management", monthlyFee: 1_750_000 }],
-    contractPeriod: "Apr - Sep 2026",
-    status: "Aktif",
-    notes: "Deposit 1 bulan",
-  },
-];
-
-export const knownMonthlyFee = managedClients.reduce(
-  (total, client) => total + client.projects.reduce((sum, project) => sum + (project.monthlyFee || 0), 0),
-  0,
-);
-
-export const activeProjectCount = managedClients.reduce((total, client) => total + client.projects.length, 0);
+export const clientContractSource = "";
+export const managedClients: ManagedClient[] = [];
+export const knownMonthlyFee = 0;
+export const activeProjectCount = 0;

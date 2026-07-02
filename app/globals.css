@@ -7,3 +7,7 @@ body { color: #25343a; background: #f8fbfa; font-family: Inter, ui-sans-serif, s
 .dark body { background: #020617; color: #dbe4e8; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

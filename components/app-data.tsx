@@ -1,18 +1,39 @@
 "use client";
 
 import type { Client, Expense, Invoice } from "@/lib/data";
-import { managedClients as initialManagedClients, type ManagedClient } from "@/lib/client-projects";
+import {
+  appCalendarEvents as initialCalendarEvents,
+  dailyWorkPlans as initialDailyWorkPlans,
+  projectTasks as initialProjectTasks,
+  teamMembers as initialTeamMembers,
+  type AppCalendarEvent,
+  type DailyWorkPlan,
+  type ProjectStatus,
+  type ProjectTask,
+  type TeamMember,
+} from "@/lib/client-projects";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 type AppData = {
   clients: Client[];
-  managedClients: ManagedClient[];
+  projectTasks: ProjectTask[];
+  dailyWorkPlans: DailyWorkPlan[];
+  calendarEvents: AppCalendarEvent[];
+  teamMembers: TeamMember[];
   invoices: Invoice[];
   expenses: Expense[];
   addClient: (client: Client) => void;
   updateClient: (id: string, client: Client) => void;
   moveClient: (id: string, stage: Client["stage"]) => void;
-  saveManagedClients: (clients: ManagedClient[]) => void;
+  saveProjectTasks: (tasks: ProjectTask[]) => void;
+  addProjectTask: (task: ProjectTask) => void;
+  updateProjectTask: (id: string, task: ProjectTask) => void;
+  moveProjectTask: (id: string, status: ProjectStatus) => void;
+  saveDailyWorkPlans: (plans: DailyWorkPlan[]) => void;
+  addDailyWorkPlan: (plan: DailyWorkPlan) => void;
+  saveCalendarEvents: (events: AppCalendarEvent[]) => void;
+  addCalendarEvent: (event: AppCalendarEvent) => void;
+  saveTeamMembers: (members: TeamMember[]) => void;
   addInvoice: (invoice: Invoice) => void;
   addExpense: (expense: Expense) => void;
 };
@@ -24,7 +45,12 @@ function useStoredState<T>(key: string, initial: T) {
   const loaded = useRef(false);
   useEffect(() => {
     const stored = localStorage.getItem(key);
-    if (stored) setValue(JSON.parse(stored));
+    if (!stored) return;
+    try {
+      setValue(JSON.parse(stored));
+    } catch {
+      localStorage.removeItem(key);
+    }
   }, [key]);
   useEffect(() => {
     if (!loaded.current) {
@@ -38,49 +64,35 @@ function useStoredState<T>(key: string, initial: T) {
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useStoredState<Client[]>("gh-clients", []);
-  const [managedClients, setManagedClients] = useStoredState<ManagedClient[]>("gh-managed-clients", initialManagedClients);
+  const [projectTasks, setProjectTasks] = useStoredState<ProjectTask[]>("gh-project-tasks-v2", initialProjectTasks);
+  const [dailyWorkPlans, setDailyWorkPlans] = useStoredState<DailyWorkPlan[]>("gh-daily-work-plans-v2", initialDailyWorkPlans);
+  const [calendarEvents, setCalendarEvents] = useStoredState<AppCalendarEvent[]>("gh-calendar-events-v2", initialCalendarEvents);
+  const [teamMembers, setTeamMembers] = useStoredState<TeamMember[]>("gh-team-members-v2", initialTeamMembers);
   const [invoices, setInvoices] = useStoredState<Invoice[]>("gh-invoices", []);
   const [expenses, setExpenses] = useStoredState<Expense[]>("gh-expenses", []);
-
-  function syncManagedClient(client: Client) {
-    const projectScopes = (client.services?.length ? client.services : [client.service]).filter(Boolean);
-    if (!client.brand || !projectScopes.length) return;
-    const feePerProject = client.value ? Math.round(client.value / projectScopes.length) : undefined;
-    setManagedClients((items) => {
-      const nextClient: ManagedClient = {
-        brand: client.brand,
-        projects: projectScopes.map((scope) => ({ scope, monthlyFee: feePerProject })),
-        status: client.stage === "Client (Active)" ? "Aktif" : client.stage === "Agreement Signed" ? "Bulanan" : "Periode belum diisi",
-        notes: client.nextAction ? `CRM next action: ${client.nextAction}` : undefined,
-      };
-      const exists = items.some((item) => item.brand.toLowerCase() === client.brand.toLowerCase());
-      return exists
-        ? items.map((item) => item.brand.toLowerCase() === client.brand.toLowerCase() ? { ...item, ...nextClient, contractPeriod: item.contractPeriod, notes: item.notes || nextClient.notes } : item)
-        : [nextClient, ...items];
-    });
-  }
 
   return (
     <DataContext.Provider
       value={{
         clients,
-        managedClients,
+        projectTasks,
+        dailyWorkPlans,
+        calendarEvents,
+        teamMembers,
         invoices,
         expenses,
-        addClient: (client) => {
-          setClients((items) => [...items, client]);
-          syncManagedClient(client);
-        },
-        updateClient: (id, client) => {
-          setClients((items) => items.map((item) => (item.id === id ? client : item)));
-          syncManagedClient(client);
-        },
-        moveClient: (id, stage) => {
-          const current = clients.find((client) => client.id === id);
-          if (current) syncManagedClient({ ...current, stage });
-          setClients((items) => items.map((client) => (client.id === id ? { ...client, stage } : client)));
-        },
-        saveManagedClients: setManagedClients,
+        addClient: (client) => setClients((items) => [...items, client]),
+        updateClient: (id, client) => setClients((items) => items.map((item) => (item.id === id ? client : item))),
+        moveClient: (id, stage) => setClients((items) => items.map((client) => (client.id === id ? { ...client, stage } : client))),
+        saveProjectTasks: setProjectTasks,
+        addProjectTask: (task) => setProjectTasks((items) => [task, ...items]),
+        updateProjectTask: (id, task) => setProjectTasks((items) => items.map((item) => (item.id === id ? task : item))),
+        moveProjectTask: (id, status) => setProjectTasks((items) => items.map((task) => (task.id === id ? { ...task, status } : task))),
+        saveDailyWorkPlans: setDailyWorkPlans,
+        addDailyWorkPlan: (plan) => setDailyWorkPlans((items) => [plan, ...items]),
+        saveCalendarEvents: setCalendarEvents,
+        addCalendarEvent: (event) => setCalendarEvents((items) => [event, ...items]),
+        saveTeamMembers: setTeamMembers,
         addInvoice: (invoice) => setInvoices((items) => [invoice, ...items]),
         addExpense: (expense) => setExpenses((items) => [expense, ...items]),
       }}

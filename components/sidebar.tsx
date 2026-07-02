@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/crm", label: "CRM", icon: UsersRound },
-  { href: "/client-management", label: "Client Management", icon: BriefcaseBusiness },
+  { href: "/client-management", label: "Project Hub", icon: BriefcaseBusiness },
   { href: "/invoices", label: "Invoice", icon: CreditCard },
   { href: "/finance", label: "Keuangan", icon: WalletCards },
   { href: "/reports", label: "Laporan", icon: BarChart3 },
