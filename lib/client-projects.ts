@@ -3,12 +3,11 @@ export type ProjectStatus = "Backlog" | "Scheduled" | "In Progress" | "Review" |
 export type ProjectPriority = "High" | "Medium" | "Low";
 
 export type TeamRole =
-  | "Project Manager"
+  | "CEO"
+  | "Marketplace & Ads Performance"
+  | "Creative Project Manager"
   | "Social Media Specialist"
-  | "Content Creator"
-  | "Ads Specialist"
-  | "Designer"
-  | "Account Executive";
+  | "Project Manager";
 
 export type TeamMember = {
   id: string;
@@ -26,11 +25,20 @@ export type ProjectTask = {
   client: string;
   status: ProjectStatus;
   assigneeId: string;
-  role: TeamRole;
-  startDate: string;
+  assignedById: string;
+  watcherId: string;
+  startDate?: string;
   dueDate: string;
   priority: ProjectPriority;
   description?: string;
+  progressUpdates?: TaskProgressUpdate[];
+};
+
+export type TaskProgressUpdate = {
+  id: string;
+  authorId: string;
+  date: string;
+  note: string;
 };
 
 export type WorkPlanStatus = "Focus" | "Review" | "Blocked" | "Done";
@@ -62,12 +70,11 @@ export type AppCalendarEvent = {
 export const projectStatuses: ProjectStatus[] = ["Backlog", "Scheduled", "In Progress", "Review", "Done"];
 
 export const teamRoles: TeamRole[] = [
-  "Project Manager",
+  "CEO",
+  "Marketplace & Ads Performance",
+  "Creative Project Manager",
   "Social Media Specialist",
-  "Content Creator",
-  "Ads Specialist",
-  "Designer",
-  "Account Executive",
+  "Project Manager",
 ];
 
 export const zooAvatars = ["Lion", "Panda", "Koala", "Tiger", "Giraffe", "Penguin", "Fox", "Elephant", "Zebra", "Otter"];
@@ -77,31 +84,31 @@ export const teamMembers: TeamMember[] = [
     id: "tm-christopher",
     name: "Christopher",
     email: "christopher@growthhive.id",
-    role: "Project Manager",
+    role: "CEO",
     avatar: "Lion",
     color: "bg-amber-100 text-amber-800",
   },
   {
-    id: "tm-social",
-    name: "Social Team",
-    email: "social@growthhive.id",
-    role: "Social Media Specialist",
+    id: "tm-joshua",
+    name: "Joshua",
+    email: "joshua@growthhive.id",
+    role: "Marketplace & Ads Performance",
     avatar: "Panda",
-    color: "bg-rose-100 text-rose-800",
-  },
-  {
-    id: "tm-creative",
-    name: "Creative Team",
-    email: "creative@growthhive.id",
-    role: "Content Creator",
-    avatar: "Koala",
     color: "bg-sky-100 text-sky-800",
   },
   {
-    id: "tm-performance",
-    name: "Performance Team",
-    email: "performance@growthhive.id",
-    role: "Ads Specialist",
+    id: "tm-inaya",
+    name: "Inaya",
+    email: "inaya@growthhive.id",
+    role: "Creative Project Manager",
+    avatar: "Koala",
+    color: "bg-rose-100 text-rose-800",
+  },
+  {
+    id: "tm-sellina",
+    name: "Sellina",
+    email: "sellina@growthhive.id",
+    role: "Social Media Specialist",
     avatar: "Tiger",
     color: "bg-violet-100 text-violet-800",
   },

@@ -35,6 +35,8 @@ type AppData = {
   addCalendarEvent: (event: AppCalendarEvent) => void;
   saveTeamMembers: (members: TeamMember[]) => void;
   addInvoice: (invoice: Invoice) => void;
+  updateInvoice: (id: string, invoice: Invoice) => void;
+  deleteInvoice: (id: string) => void;
   addExpense: (expense: Expense) => void;
 };
 
@@ -64,10 +66,10 @@ function useStoredState<T>(key: string, initial: T) {
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useStoredState<Client[]>("gh-clients", []);
-  const [projectTasks, setProjectTasks] = useStoredState<ProjectTask[]>("gh-project-tasks-v2", initialProjectTasks);
+  const [projectTasks, setProjectTasks] = useStoredState<ProjectTask[]>("gh-project-tasks-v3", initialProjectTasks);
   const [dailyWorkPlans, setDailyWorkPlans] = useStoredState<DailyWorkPlan[]>("gh-daily-work-plans-v2", initialDailyWorkPlans);
   const [calendarEvents, setCalendarEvents] = useStoredState<AppCalendarEvent[]>("gh-calendar-events-v2", initialCalendarEvents);
-  const [teamMembers, setTeamMembers] = useStoredState<TeamMember[]>("gh-team-members-v2", initialTeamMembers);
+  const [teamMembers, setTeamMembers] = useStoredState<TeamMember[]>("gh-team-members-v3", initialTeamMembers);
   const [invoices, setInvoices] = useStoredState<Invoice[]>("gh-invoices", []);
   const [expenses, setExpenses] = useStoredState<Expense[]>("gh-expenses", []);
 
@@ -94,6 +96,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         addCalendarEvent: (event) => setCalendarEvents((items) => [event, ...items]),
         saveTeamMembers: setTeamMembers,
         addInvoice: (invoice) => setInvoices((items) => [invoice, ...items]),
+        updateInvoice: (id, invoice) => setInvoices((items) => items.map((item) => (item.id === id ? invoice : item))),
+        deleteInvoice: (id) => setInvoices((items) => items.filter((invoice) => invoice.id !== id)),
         addExpense: (expense) => setExpenses((items) => [expense, ...items]),
       }}
     >

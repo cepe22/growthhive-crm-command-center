@@ -33,8 +33,10 @@ import {
   Sparkles,
   Trash2,
   UserRoundPlus,
+  UsersRound,
   Video,
   X,
+  MessageSquarePlus,
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
@@ -110,6 +112,7 @@ export default function ClientManagementPage() {
     dailyWorkPlans,
     calendarEvents,
     teamMembers,
+    clients,
     saveProjectTasks,
     addProjectTask,
     updateProjectTask,
@@ -120,15 +123,23 @@ export default function ClientManagementPage() {
     addCalendarEvent,
     saveTeamMembers,
   } = useAppData();
-  const [view, setView] = useState<"board" | "timeline" | "workplan" | "calendar">("board");
+  const [view, setView] = useState<"board" | "timeline" | "clients" | "workplan" | "calendar">("board");
   const [taskModal, setTaskModal] = useState(false);
+  const [progressModal, setProgressModal] = useState(false);
   const [planModal, setPlanModal] = useState(false);
   const [eventModal, setEventModal] = useState(false);
   const [memberModal, setMemberModal] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+  const [progressTask, setProgressTask] = useState<ProjectTask | null>(null);
   const [selectedDate, setSelectedDate] = useState(today());
 
   const memberById = (id: string) => teamMembers.find((member) => member.id === id) || teamMembers[0];
+  const activeClients = clients.filter((client) => client.stage === "Client (Active)");
+  const projectOptions = Array.from(new Set(activeClients.flatMap((client) => client.services?.length ? client.services : client.service.split(",").map((service) => service.trim()).filter(Boolean))));
+  const clientOptions = activeClients.map((client) => client.brand);
+  const assigners = teamMembers.filter((member) => member.id === "tm-christopher" || member.id === "tm-inaya");
+  const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
+  const taskClientOptions = Array.from(new Set([...(editingTask?.client ? [editingTask.client] : []), ...clientOptions]));
   const activeTasks = projectTasks.filter((task) => task.status !== "Done");
   const dueThisWeek = projectTasks.filter((task) => {
     const distance = daysBetween(today(), task.dueDate);
@@ -137,7 +148,7 @@ export default function ClientManagementPage() {
   const plansToday = dailyWorkPlans.filter((plan) => plan.date === selectedDate);
   const appEventsToday = calendarEvents.filter((event) => event.date === selectedDate);
   const timeline = useMemo(() => {
-    const base = projectTasks.length ? projectTasks.map((task) => task.startDate).sort()[0] : today();
+    const base = projectTasks.length ? projectTasks.map((task) => task.dueDate).sort()[0] : today();
     return { base, span: Math.max(14, ...projectTasks.map((task) => dateOffset(base, task.dueDate) + 1)) };
   }, [projectTasks]);
 
@@ -156,11 +167,12 @@ export default function ClientManagementPage() {
       client: String(data.get("client")),
       status: String(data.get("status")) as ProjectStatus,
       assigneeId: String(data.get("assigneeId")),
-      role: String(data.get("role")) as TeamRole,
-      startDate: String(data.get("startDate")),
+      assignedById: String(data.get("assignedById")),
+      watcherId: String(data.get("watcherId")),
       dueDate: String(data.get("dueDate")),
       priority: String(data.get("priority")) as ProjectPriority,
       description: String(data.get("description")),
+      progressUpdates: editingTask?.progressUpdates || [],
     };
     if (editingTask) updateProjectTask(editingTask.id, task);
     else addProjectTask(task);
@@ -229,6 +241,32 @@ export default function ClientManagementPage() {
     saveProjectTasks(projectTasks.filter((item) => item.id !== task.id));
   }
 
+  function openProgress(task: ProjectTask) {
+    setProgressTask(task);
+    setProgressModal(true);
+  }
+
+  function submitProgress(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!progressTask) return;
+    const data = new FormData(event.currentTarget);
+    const updatedTask: ProjectTask = {
+      ...progressTask,
+      progressUpdates: [
+        ...(progressTask.progressUpdates || []),
+        {
+          id: crypto.randomUUID(),
+          authorId: String(data.get("authorId")),
+          date: today(),
+          note: String(data.get("note")),
+        },
+      ],
+    };
+    updateProjectTask(progressTask.id, updatedTask);
+    setProgressTask(null);
+    setProgressModal(false);
+  }
+
   function removePlan(plan: DailyWorkPlan) {
     saveDailyWorkPlans(dailyWorkPlans.filter((item) => item.id !== plan.id));
   }
@@ -256,8 +294,8 @@ export default function ClientManagementPage() {
               {[
                 { label: "Active Task", value: activeTasks.length, color: "bg-teal-100 text-teal-800", icon: Columns3 },
                 { label: "Deadline 7 Hari", value: dueThisWeek, color: "bg-amber-100 text-amber-800", icon: Clock3 },
+                { label: "Active Client", value: activeClients.length, color: "bg-emerald-100 text-emerald-800", icon: UsersRound },
                 { label: "Work Plan", value: plansToday.length, color: "bg-sky-100 text-sky-800", icon: ListChecks },
-                { label: "App Event", value: calendarEvents.length, color: "bg-violet-100 text-violet-800", icon: CalendarDays },
               ].map(({ label, value, color, icon: Icon }) => (
                 <div key={label} className="rounded-lg border border-white bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950">
                   <div className={cn("mb-4 grid h-10 w-10 place-items-center rounded-lg", color)}><Icon size={18} /></div>
@@ -295,6 +333,7 @@ export default function ClientManagementPage() {
           {[
             { id: "board", label: "Board", icon: Columns3 },
             { id: "timeline", label: "Timeline", icon: ChartGantt },
+            { id: "clients", label: "Clients", icon: UsersRound },
             { id: "workplan", label: "Work Plan", icon: ListChecks },
             { id: "calendar", label: "Calendar", icon: CalendarDays },
           ].map(({ id, label, icon: Icon }) => (
@@ -322,7 +361,7 @@ export default function ClientManagementPage() {
                   <span className="ml-auto rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-900">{items.length}</span>
                 </div>
                 <div className="space-y-3">
-                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} onEdit={() => { setEditingTask(task); setTaskModal(true); }} onRemove={() => removeTask(task)} />)}
+                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} onEdit={() => { setEditingTask(task); setTaskModal(true); }} onProgress={() => openProgress(task)} onRemove={() => removeTask(task)} />)}
                 </div>
               </div>
             );
@@ -341,8 +380,8 @@ export default function ClientManagementPage() {
           </div>
           {!projectTasks.length ? <EmptyProjectState /> : <div className="space-y-3 overflow-x-auto pb-2">
             {projectTasks.map((task) => {
-              const offset = dateOffset(timeline.base, task.startDate);
-              const width = daysBetween(task.startDate, task.dueDate);
+              const offset = dateOffset(timeline.base, task.dueDate);
+              const width = 1;
               return (
                 <div key={task.id} className="grid min-w-[860px] grid-cols-[230px_1fr] items-center gap-4">
                   <div className="flex items-center gap-3">
@@ -361,6 +400,44 @@ export default function ClientManagementPage() {
               );
             })}
           </div>}
+        </Card>
+      )}
+
+      {view === "clients" && (
+        <Card className="overflow-hidden rounded-lg">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <div>
+              <h2 className="font-black">Active Clients</h2>
+              <p className="text-xs text-slate-400">Otomatis dari CRM stage Client (Active)</p>
+            </div>
+            <Badge tone="teal">{activeClients.length} berjalan</Badge>
+          </div>
+          {!activeClients.length ? <EmptyProjectState /> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
+                  <tr>{["Client", "PIC", "Project berjalan", "Value", "Owner", "Health"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {activeClients.map((client) => {
+                    const projects = client.services?.length ? client.services : client.service.split(",").map((service) => service.trim()).filter(Boolean);
+                    return (
+                      <tr key={client.id} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="p-4 font-black">{client.brand}</td>
+                        <td className="p-4">{client.pic}</td>
+                        <td className="p-4">
+                          <div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project} tone="slate">{project}</Badge>)}</div>
+                        </td>
+                        <td className="p-4 font-black">Rp{new Intl.NumberFormat("id-ID").format(client.value)}</td>
+                        <td className="p-4">{client.owner || "GH"}</td>
+                        <td className="p-4"><Badge tone={client.health === "Red" ? "red" : client.health === "Amber" ? "amber" : "teal"}>{client.health || "Green"}</Badge></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
@@ -451,22 +528,66 @@ export default function ClientManagementPage() {
         <form onSubmit={submitTask} className="space-y-4">
           <input name="title" required defaultValue={editingTask?.title || ""} className={fieldClass} placeholder="Nama task" />
           <div className="grid gap-3 md:grid-cols-2">
-            <input name="project" required defaultValue={editingTask?.project || ""} className={fieldClass} placeholder="Project" />
-            <input name="client" defaultValue={editingTask?.client || ""} className={fieldClass} placeholder="Client / brand" />
+            <label>
+              <span className="mb-2 block text-xs font-bold">Project berjalan</span>
+              <select name="project" required defaultValue={editingTask?.project || ""} className={fieldClass}>
+                <option value="" disabled>{taskProjectOptions.length ? "Pilih project" : "Belum ada project active"}</option>
+                {taskProjectOptions.map((project) => <option key={project}>{project}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Client / brand</span>
+              <select name="client" required defaultValue={editingTask?.client || ""} className={fieldClass}>
+                <option value="" disabled>{taskClientOptions.length ? "Pilih client" : "Belum ada client active"}</option>
+                {taskClientOptions.map((client) => <option key={client}>{client}</option>)}
+              </select>
+            </label>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <select name="assigneeId" defaultValue={editingTask?.assigneeId || teamMembers[0]?.id} className={fieldClass}>{teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
-            <select name="role" defaultValue={editingTask?.role || "Social Media Specialist"} className={fieldClass}>{teamRoles.map((role) => <option key={role}>{role}</option>)}</select>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Assign ke</span>
+              <select name="assigneeId" defaultValue={editingTask?.assigneeId || teamMembers[0]?.id} className={fieldClass}>{teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+            </label>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Assigned by</span>
+              <select name="assignedById" defaultValue={editingTask?.assignedById || assigners[0]?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+            </label>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <select name="status" defaultValue={editingTask?.status || "Scheduled"} className={fieldClass}>{projectStatuses.map((status) => <option key={status}>{status}</option>)}</select>
             <select name="priority" defaultValue={editingTask?.priority || "Medium"} className={fieldClass}>{(["High", "Medium", "Low"] as ProjectPriority[]).map((priority) => <option key={priority}>{priority}</option>)}</select>
             <input name="dueDate" required type="date" defaultValue={editingTask?.dueDate || today()} className={fieldClass} />
           </div>
-          <input name="startDate" required type="date" defaultValue={editingTask?.startDate || today()} className={fieldClass} />
+          <label>
+            <span className="mb-2 block text-xs font-bold">Pengawas progress</span>
+            <select name="watcherId" defaultValue={editingTask?.watcherId || editingTask?.assignedById || assigners[0]?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+          </label>
           <textarea name="description" defaultValue={editingTask?.description || ""} rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Catatan singkat" />
-          <Button className="w-full">Simpan Task</Button>
+          {!activeClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Tambahkan atau pindahkan deal CRM ke Client (Active) agar project dan client bisa dipilih.</p>}
+          <Button disabled={!taskProjectOptions.length || !taskClientOptions.length} className="w-full">Simpan Task</Button>
         </form>
+      </Modal>
+
+      <Modal open={progressModal} title={`Progress · ${progressTask?.title || ""}`} onClose={() => { setProgressModal(false); setProgressTask(null); }}>
+        {progressTask && <form onSubmit={submitProgress} className="space-y-4">
+          <label>
+            <span className="mb-2 block text-xs font-bold">Ditambahkan oleh</span>
+            <select name="authorId" className={fieldClass}>{Array.from(new Set([progressTask.assignedById, progressTask.watcherId])).map((id) => <option key={id} value={id}>{memberById(id).name}</option>)}</select>
+          </label>
+          <textarea name="note" required rows={5} className={`${fieldClass} h-auto py-3`} placeholder="Tulis notes atau progress update terbaru" />
+          <div className="space-y-3">
+            {(progressTask.progressUpdates || []).slice().reverse().map((update) => (
+              <div key={update.id} className="rounded-lg border border-slate-100 p-3 text-sm dark:border-slate-800">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="font-black">{memberById(update.authorId).name}</span>
+                  <span className="text-xs text-slate-400">{formatDate(update.date)}</span>
+                </div>
+                <p className="whitespace-pre-line text-slate-500 dark:text-slate-300">{update.note}</p>
+              </div>
+            ))}
+          </div>
+          <Button className="w-full">Simpan Progress</Button>
+        </form>}
       </Modal>
 
       <Modal open={planModal} title="Isi Work Plan Harian" onClose={() => setPlanModal(false)}>
@@ -520,7 +641,8 @@ function Avatar({ member }: { member: TeamMember }) {
   return <div className="flex min-w-0 items-center gap-2"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg", member.color)}>{avatarEmoji[member.avatar]}</span><div className="min-w-0"><p className="truncate text-sm font-black">{member.name}</p><p className="truncate text-[11px] text-slate-400">{member.role}</p></div></div>;
 }
 
-function TaskCard({ task, member, onEdit, onRemove }: { task: ProjectTask; member: TeamMember; onEdit: () => void; onRemove: () => void }) {
+function TaskCard({ task, member, assigner, watcher, onEdit, onProgress, onRemove }: { task: ProjectTask; member: TeamMember; assigner: TeamMember; watcher: TeamMember; onEdit: () => void; onProgress: () => void; onRemove: () => void }) {
+  const latestUpdate = task.progressUpdates?.slice().reverse()[0];
   return (
     <article draggable onDragStart={(event) => event.dataTransfer.setData("id", task.id)} className="animate-[fadeUp_.28s_ease-out] rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-3 flex items-start justify-between gap-2">
@@ -530,11 +652,17 @@ function TaskCard({ task, member, onEdit, onRemove }: { task: ProjectTask; membe
         </div>
         <div className="flex gap-1">
           <button onClick={onEdit} title="Edit task" className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button>
+          <button onClick={onProgress} title="Tambah progress" className="grid h-8 w-8 place-items-center rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-sky-900 dark:hover:bg-sky-950"><MessageSquarePlus size={14} /></button>
           <button onClick={onRemove} title="Hapus task" className="grid h-8 w-8 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50"><Trash2 size={14} /></button>
         </div>
       </div>
       <Avatar member={member} />
+      <div className="mt-3 grid gap-2 text-[11px] font-bold text-slate-400">
+        <span>Assigned by {assigner.name}</span>
+        <span>Pengawas {watcher.name}</span>
+      </div>
       <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-300">{task.description || "Belum ada catatan."}</p>
+      {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{assigner.id === latestUpdate.authorId ? assigner.name : watcher.name}: </span>{latestUpdate.note}</div>}
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
         <Badge tone={priorityTone[task.priority]}>{task.priority}</Badge>
         <span className="text-xs font-black text-slate-500">{formatDate(task.dueDate)}</span>
