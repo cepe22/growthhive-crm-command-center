@@ -416,7 +416,7 @@ export default function ClientManagementPage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-left text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
-                  <tr>{["Client", "PIC", "Project berjalan", "Value", "Owner", "Health"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
+                  <tr>{["Client", "PIC", "Scope", "Output", "Owner", "Health"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
                 </thead>
                 <tbody>
                   {activeClients.map((client) => {
@@ -428,7 +428,7 @@ export default function ClientManagementPage() {
                         <td className="p-4">
                           <div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project} tone="slate">{project}</Badge>)}</div>
                         </td>
-                        <td className="p-4 font-black">Rp{new Intl.NumberFormat("id-ID").format(client.value)}</td>
+                        <td className="p-4 text-slate-500">{client.nextAction || "Output mengikuti task board"}</td>
                         <td className="p-4">{client.owner || "GH"}</td>
                         <td className="p-4"><Badge tone={client.health === "Red" ? "red" : client.health === "Amber" ? "amber" : "teal"}>{client.health || "Green"}</Badge></td>
                       </tr>
