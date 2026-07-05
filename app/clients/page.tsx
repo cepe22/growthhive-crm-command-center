@@ -4,7 +4,7 @@ import { useAppData } from "@/components/app-data";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { Badge, Card } from "@/components/ui";
-import { stages, type Client } from "@/lib/data";
+import { type Client } from "@/lib/data";
 import { rupiah } from "@/lib/utils";
 import { BriefcaseBusiness, CircleDollarSign, HeartPulse, Target } from "lucide-react";
 
@@ -18,12 +18,15 @@ const stageTone: Record<Client["stage"], "teal" | "amber" | "red" | "slate"> = {
   "Post-Client": "slate",
 };
 
+const clientDirectoryStages: Client["stage"][] = ["Agreement Signed", "Client (Active)", "Post-Client"];
+
 export default function ClientsPage() {
   const { clients } = useAppData();
-  const activeClients = clients.filter((client) => client.stage === "Client (Active)");
-  const totalValue = clients.reduce((sum, client) => sum + client.value, 0);
-  const weightedValue = clients.reduce((sum, client) => sum + client.value * ((client.probability ?? 35) / 100), 0);
-  const healthyClients = clients.filter((client) => (client.health || "Green") === "Green").length;
+  const directoryClients = clients.filter((client) => clientDirectoryStages.includes(client.stage));
+  const activeClients = directoryClients.filter((client) => client.stage === "Client (Active)");
+  const totalValue = directoryClients.reduce((sum, client) => sum + client.value, 0);
+  const weightedValue = directoryClients.reduce((sum, client) => sum + client.value * ((client.probability ?? 35) / 100), 0);
+  const healthyClients = directoryClients.filter((client) => (client.health || "Green") === "Green").length;
 
   return (
     <>
@@ -31,7 +34,7 @@ export default function ClientsPage() {
 
       <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Total Client/Deal", value: String(clients.length), icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
+          { label: "Total Client/Deal", value: String(directoryClients.length), icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
           { label: "Active Client", value: String(activeClients.length), icon: HeartPulse, color: "bg-emerald-50 text-emerald-700" },
           { label: "Nilai Kerja Sama", value: rupiah(totalValue), icon: CircleDollarSign, color: "bg-sky-50 text-sky-700" },
           { label: "Weighted Value", value: rupiah(weightedValue), icon: Target, color: "bg-amber-50 text-amber-700" },
@@ -48,15 +51,15 @@ export default function ClientsPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-black">Client by Journey</h2>
-            <p className="mt-1 text-xs text-slate-400">Jumlah client/deal berdasarkan stage CRM.</p>
+            <p className="mt-1 text-xs text-slate-400">Hanya deal signed, active client, dan post-client.</p>
           </div>
           <Badge tone="teal">{healthyClients} healthy</Badge>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-          {stages.map((stage) => (
+        <div className="grid gap-3 md:grid-cols-3">
+          {clientDirectoryStages.map((stage) => (
             <div key={stage} className="rounded-lg border border-slate-100 p-3 dark:border-slate-800">
               <p className="min-h-9 text-xs font-black text-slate-500 dark:text-slate-300">{stage}</p>
-              <p className="mt-2 text-2xl font-black">{clients.filter((client) => client.stage === stage).length}</p>
+              <p className="mt-2 text-2xl font-black">{directoryClients.filter((client) => client.stage === stage).length}</p>
             </div>
           ))}
         </div>
@@ -69,14 +72,14 @@ export default function ClientsPage() {
             <p className="mt-1 text-xs text-slate-400">Halaman ini memuat nilai kerja sama, jadi dipisahkan dari Project Hub.</p>
           </div>
         </div>
-        {!clients.length ? <EmptyState title="Belum ada client" description="Tambahkan deal melalui CRM untuk mengisi client directory." /> : (
+        {!directoryClients.length ? <EmptyState title="Belum ada active client" description="Deal yang masih leads, pitching, atau negotiation tetap ada di CRM dan akan muncul di sini setelah signed/active." /> : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
                 <tr>{["Client", "PIC", "Stage", "Scope", "Nilai Kerja Sama", "Forecast", "Owner", "Health", "Next Output"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
               </thead>
               <tbody>
-                {clients.map((client) => {
+                {directoryClients.map((client) => {
                   const projects = client.services?.length ? client.services : client.service.split(",").map((service) => service.trim()).filter(Boolean);
                   return (
                     <tr key={client.id} className="border-t border-slate-100 align-top dark:border-slate-800">
