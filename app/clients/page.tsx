@@ -18,14 +18,12 @@ const stageTone: Record<Client["stage"], "teal" | "amber" | "red" | "slate"> = {
   "Post-Client": "slate",
 };
 
-const clientDirectoryStages: Client["stage"][] = ["Agreement Signed", "Client (Active)", "Post-Client"];
+const clientDirectoryStages: Client["stage"][] = ["Client (Active)"];
 
 export default function ClientsPage() {
   const { clients } = useAppData();
   const directoryClients = clients.filter((client) => clientDirectoryStages.includes(client.stage));
-  const activeClients = directoryClients.filter((client) => client.stage === "Client (Active)");
   const totalValue = directoryClients.reduce((sum, client) => sum + client.value, 0);
-  const weightedValue = directoryClients.reduce((sum, client) => sum + client.value * ((client.probability ?? 35) / 100), 0);
   const healthyClients = directoryClients.filter((client) => (client.health || "Green") === "Green").length;
 
   return (
@@ -34,10 +32,10 @@ export default function ClientsPage() {
 
       <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Total Client/Deal", value: String(directoryClients.length), icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
-          { label: "Active Client", value: String(activeClients.length), icon: HeartPulse, color: "bg-emerald-50 text-emerald-700" },
+          { label: "Total Active Client", value: String(directoryClients.length), icon: BriefcaseBusiness, color: "bg-teal-50 text-teal-700" },
+          { label: "Healthy Client", value: String(healthyClients), icon: HeartPulse, color: "bg-emerald-50 text-emerald-700" },
           { label: "Nilai Kerja Sama", value: rupiah(totalValue), icon: CircleDollarSign, color: "bg-sky-50 text-sky-700" },
-          { label: "Weighted Value", value: rupiah(weightedValue), icon: Target, color: "bg-amber-50 text-amber-700" },
+          { label: "Projected Revenue", value: rupiah(totalValue), icon: Target, color: "bg-amber-50 text-amber-700" },
         ].map(({ label, value, icon: Icon, color }) => (
           <Card key={label} className="rounded-lg p-5">
             <div className={`mb-5 grid h-11 w-11 place-items-center rounded-lg ${color}`}><Icon size={20} /></div>
@@ -50,8 +48,8 @@ export default function ClientsPage() {
       <section className="mb-5 rounded-lg border border-slate-200/80 bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-black">Client by Journey</h2>
-            <p className="mt-1 text-xs text-slate-400">Hanya deal signed, active client, dan post-client.</p>
+            <h2 className="font-black">Client Status</h2>
+            <p className="mt-1 text-xs text-slate-400">Hanya client dengan stage CRM Client (Active).</p>
           </div>
           <Badge tone="teal">{healthyClients} healthy</Badge>
         </div>
@@ -72,11 +70,11 @@ export default function ClientsPage() {
             <p className="mt-1 text-xs text-slate-400">Halaman ini memuat nilai kerja sama, jadi dipisahkan dari Project Hub.</p>
           </div>
         </div>
-        {!directoryClients.length ? <EmptyState title="Belum ada active client" description="Deal yang masih leads, pitching, atau negotiation tetap ada di CRM dan akan muncul di sini setelah signed/active." /> : (
+        {!directoryClients.length ? <EmptyState title="Belum ada active client" description="Deal yang masih leads, pitching, negotiation, atau agreement signed tetap ada di CRM dan akan muncul di sini setelah stage-nya Client (Active)." /> : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
-                <tr>{["Client", "PIC", "Stage", "Scope", "Nilai Kerja Sama", "Forecast", "Owner", "Health", "Next Output"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
+                <tr>{["Client", "PIC", "Stage", "Scope", "Nilai Kerja Sama", "Projected Revenue", "Owner", "Health", "Next Output"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
               </thead>
               <tbody>
                 {directoryClients.map((client) => {
@@ -91,7 +89,7 @@ export default function ClientsPage() {
                       <td className="p-4"><Badge tone={stageTone[client.stage]}>{client.stage}</Badge></td>
                       <td className="p-4"><div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project} tone="slate">{project}</Badge>)}</div></td>
                       <td className="p-4 font-black">{rupiah(client.value)}</td>
-                      <td className="p-4">{rupiah(client.value * ((client.probability ?? 35) / 100))}</td>
+                      <td className="p-4">{rupiah(client.value)}</td>
                       <td className="p-4">{client.owner || "GH"}</td>
                       <td className="p-4"><Badge tone={client.health === "Red" ? "red" : client.health === "Amber" ? "amber" : "teal"}>{client.health || "Green"}</Badge></td>
                       <td className="max-w-xs p-4 text-xs leading-5 text-slate-500">{client.nextAction || "-"}</td>
