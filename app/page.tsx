@@ -4,7 +4,7 @@ import { useAppData } from "@/components/app-data";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { Badge, Card } from "@/components/ui";
-import { stages } from "@/lib/data";
+import { getClientValue, stages } from "@/lib/data";
 import { rupiah } from "@/lib/utils";
 import { BriefcaseBusiness, CalendarCheck2, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall } from "lucide-react";
 import Link from "next/link";
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const { clients, projectTasks, dailyWorkPlans, calendarEvents, invoices } = useAppData();
   const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
-  const openPipeline = clients.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + client.value, 0);
+  const openPipeline = clients.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
   const activeProjects = projectTasks.filter((task) => task.status !== "Done").length;
   const today = new Date().toISOString().slice(0, 10);
   const todayPlans = dailyWorkPlans.filter((plan) => plan.date === today).length;

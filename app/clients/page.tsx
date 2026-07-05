@@ -4,7 +4,7 @@ import { useAppData } from "@/components/app-data";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { Badge, Card } from "@/components/ui";
-import { type Client } from "@/lib/data";
+import { getClientProjects, getClientValue, type Client } from "@/lib/data";
 import { rupiah } from "@/lib/utils";
 import { BriefcaseBusiness, CircleDollarSign, HeartPulse, Target } from "lucide-react";
 
@@ -20,10 +20,15 @@ const stageTone: Record<Client["stage"], "teal" | "amber" | "red" | "slate"> = {
 
 const clientDirectoryStages: Client["stage"][] = ["Client (Active)"];
 
+function projectFee(project: ReturnType<typeof getClientProjects>[number]) {
+  if (project.monthlyFee) return rupiah(project.monthlyFee);
+  return project.feeNote || "-";
+}
+
 export default function ClientsPage() {
   const { clients } = useAppData();
   const directoryClients = clients.filter((client) => clientDirectoryStages.includes(client.stage));
-  const totalValue = directoryClients.reduce((sum, client) => sum + client.value, 0);
+  const totalValue = directoryClients.reduce((sum, client) => sum + getClientValue(client), 0);
   const healthyClients = directoryClients.filter((client) => (client.health || "Green") === "Green").length;
 
   return (
@@ -78,7 +83,7 @@ export default function ClientsPage() {
               </thead>
               <tbody>
                 {directoryClients.map((client) => {
-                  const projects = client.services?.length ? client.services : client.service.split(",").map((service) => service.trim()).filter(Boolean);
+                  const projects = getClientProjects(client);
                   return (
                     <tr key={client.id} className="border-t border-slate-100 align-top dark:border-slate-800">
                       <td className="p-4">
@@ -87,10 +92,21 @@ export default function ClientsPage() {
                       </td>
                       <td className="p-4">{client.pic}</td>
                       <td className="p-4"><Badge tone={stageTone[client.stage]}>{client.stage}</Badge></td>
-                      <td className="p-4"><div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project} tone="slate">{project}</Badge>)}</div></td>
-                      <td className="max-w-sm p-4 text-xs leading-5 text-slate-500">{client.cooperationScope || "-"}</td>
-                      <td className="p-4 font-black">{rupiah(client.value)}</td>
-                      <td className="p-4">{rupiah(client.value)}</td>
+                      <td className="p-4">
+                        <div className="space-y-2">
+                          {projects.map((project) => (
+                            <div key={project.id} className="rounded-lg bg-slate-50 p-2 dark:bg-slate-950">
+                              <p className="text-xs font-black">{project.name}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">{projectFee(project)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="max-w-sm p-4 text-xs leading-5 text-slate-500">
+                        <div className="space-y-2">{projects.map((project) => <p key={project.id}>{project.scope || project.name}</p>)}</div>
+                      </td>
+                      <td className="p-4 font-black">{rupiah(getClientValue(client))}</td>
+                      <td className="p-4">{rupiah(getClientValue(client))}</td>
                       <td className="p-4">{client.owner || "GH"}</td>
                       <td className="p-4"><Badge tone={client.health === "Red" ? "red" : client.health === "Amber" ? "amber" : "teal"}>{client.health || "Green"}</Badge></td>
                       <td className="max-w-xs p-4 text-xs leading-5 text-slate-500">{client.nextAction || "-"}</td>

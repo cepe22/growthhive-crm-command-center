@@ -1,6 +1,6 @@
 "use client";
 
-import type { Client, Expense, Invoice } from "@/lib/data";
+import { activeGhClients, type Client, type Expense, type Invoice } from "@/lib/data";
 import {
   appCalendarEvents as initialCalendarEvents,
   dailyWorkPlans as initialDailyWorkPlans,
@@ -41,6 +41,14 @@ type AppData = {
 };
 
 const DataContext = createContext<AppData | null>(null);
+const activeClientSeedVersion = "gh-active-clients-2026-07-05-v1";
+
+function mergeActiveGhClients(existing: Client[]) {
+  const seededBrands = new Set(activeGhClients.map((client) => client.brand.toLowerCase()));
+  const seededIds = new Set(activeGhClients.map((client) => client.id));
+  const customClients = existing.filter((client) => !seededIds.has(client.id) && !seededBrands.has(client.brand.toLowerCase()));
+  return [...activeGhClients, ...customClients];
+}
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial);
@@ -65,13 +73,28 @@ function useStoredState<T>(key: string, initial: T) {
 }
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [clients, setClients] = useStoredState<Client[]>("gh-clients", []);
+  const [clients, setClients] = useStoredState<Client[]>("gh-clients", activeGhClients);
   const [projectTasks, setProjectTasks] = useStoredState<ProjectTask[]>("gh-project-tasks-v3", initialProjectTasks);
   const [dailyWorkPlans, setDailyWorkPlans] = useStoredState<DailyWorkPlan[]>("gh-daily-work-plans-v2", initialDailyWorkPlans);
   const [calendarEvents, setCalendarEvents] = useStoredState<AppCalendarEvent[]>("gh-calendar-events-v2", initialCalendarEvents);
   const [teamMembers, setTeamMembers] = useStoredState<TeamMember[]>("gh-team-members-v3", initialTeamMembers);
   const [invoices, setInvoices] = useStoredState<Invoice[]>("gh-invoices", []);
   const [expenses, setExpenses] = useStoredState<Expense[]>("gh-expenses", []);
+
+  useEffect(() => {
+    if (localStorage.getItem("gh-active-client-seed-version") === activeClientSeedVersion) return;
+    let storedClients: Client[] = [];
+    const stored = localStorage.getItem("gh-clients");
+    if (stored) {
+      try {
+        storedClients = JSON.parse(stored);
+      } catch {
+        storedClients = [];
+      }
+    }
+    setClients(mergeActiveGhClients(storedClients));
+    localStorage.setItem("gh-active-client-seed-version", activeClientSeedVersion);
+  }, [setClients]);
 
   return (
     <DataContext.Provider

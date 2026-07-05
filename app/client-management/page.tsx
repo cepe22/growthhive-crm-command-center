@@ -18,6 +18,7 @@ import {
   type TeamRole,
   type WorkPlanStatus,
 } from "@/lib/client-projects";
+import { getClientProjects } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import {
   CalendarDays,
@@ -135,7 +136,7 @@ export default function ClientManagementPage() {
 
   const memberById = (id: string) => teamMembers.find((member) => member.id === id) || teamMembers[0];
   const activeClients = clients.filter((client) => client.stage === "Client (Active)");
-  const projectOptions = Array.from(new Set(activeClients.flatMap((client) => client.services?.length ? client.services : client.service.split(",").map((service) => service.trim()).filter(Boolean))));
+  const projectOptions = Array.from(new Set(activeClients.flatMap((client) => getClientProjects(client).map((project) => project.name))));
   const clientOptions = activeClients.map((client) => client.brand);
   const assigners = teamMembers.filter((member) => member.id === "tm-christopher" || member.id === "tm-inaya");
   const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
@@ -420,15 +421,17 @@ export default function ClientManagementPage() {
                 </thead>
                 <tbody>
                   {activeClients.map((client) => {
-                    const projects = client.services?.length ? client.services : client.service.split(",").map((service) => service.trim()).filter(Boolean);
+                    const projects = getClientProjects(client);
                     return (
                       <tr key={client.id} className="border-t border-slate-100 dark:border-slate-800">
                         <td className="p-4 font-black">{client.brand}</td>
                         <td className="p-4">{client.pic}</td>
                         <td className="p-4">
-                          <div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project} tone="slate">{project}</Badge>)}</div>
+                          <div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project.id} tone="slate">{project.name}</Badge>)}</div>
                         </td>
-                        <td className="max-w-sm p-4 text-xs leading-5 text-slate-500">{client.cooperationScope || "-"}</td>
+                        <td className="max-w-sm p-4 text-xs leading-5 text-slate-500">
+                          <div className="space-y-2">{projects.map((project) => <p key={project.id}>{project.scope || project.name}</p>)}</div>
+                        </td>
                         <td className="p-4 text-slate-500">{client.nextAction || "Output mengikuti task board"}</td>
                         <td className="p-4">{client.owner || "GH"}</td>
                         <td className="p-4"><Badge tone={client.health === "Red" ? "red" : client.health === "Amber" ? "amber" : "teal"}>{client.health || "Green"}</Badge></td>

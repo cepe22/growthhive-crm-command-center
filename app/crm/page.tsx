@@ -4,7 +4,7 @@ import { Header } from "@/components/header";
 import { fieldClass, Modal } from "@/components/modal";
 import { useAppData } from "@/components/app-data";
 import { Badge, Button, Card } from "@/components/ui";
-import { stages, type Client } from "@/lib/data";
+import { getClientProjects, getClientValue, stages, totalProjectValue, type Client, type ClientProject } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { rupiah } from "@/lib/utils";
 import {
@@ -51,11 +51,29 @@ const serviceOptions = [
   "Shopee ads growth",
   "Tiktok ads growth",
   "Meta ads growth",
+  "Social Media Agency",
+  "Meta Ads Management",
+  "Shopee Ads Management",
+  "Marketing Consulting",
 ];
 
 function formatDate(value?: string) {
   if (!value) return "Belum dijadwalkan";
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(new Date(value));
+}
+
+function projectNames(client: Client) {
+  return getClientProjects(client).map((project) => project.name).filter(Boolean).join(", ");
+}
+
+function projectScopes(client: Client) {
+  return getClientProjects(client).map((project) => project.scope || project.name).filter(Boolean).join("; ");
+}
+
+function projectFormRows(editing: Client | null) {
+  const projects = editing ? getClientProjects(editing) : [];
+  const rowCount = Math.max(4, projects.length + 1);
+  return Array.from({ length: rowCount }, (_, index) => projects[index] || null);
 }
 
 export default function CRMPage() {
@@ -66,26 +84,47 @@ export default function CRMPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const filtered = clients.filter((client) => {
-    const haystack = `${client.brand} ${client.pic} ${client.service} ${client.cooperationScope || ""} ${client.industry}`.toLowerCase();
+    const haystack = `${client.brand} ${client.pic} ${projectNames(client)} ${projectScopes(client)} ${client.cooperationScope || ""} ${client.industry}`.toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!industry || client.industry === industry);
   });
-  const weightedPipeline = filtered.reduce((sum, client) => sum + client.value * ((client.probability ?? 45) / 100), 0);
-  const wonValue = filtered.filter((client) => client.stage === "Client (Active)" || client.stage === "Post-Client").reduce((sum, client) => sum + client.value, 0);
-  const openValue = filtered.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + client.value, 0);
+  const weightedPipeline = filtered.reduce((sum, client) => sum + getClientValue(client) * ((client.probability ?? 45) / 100), 0);
+  const wonValue = filtered.filter((client) => client.stage === "Client (Active)" || client.stage === "Post-Client").reduce((sum, client) => sum + getClientValue(client), 0);
+  const openValue = filtered.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
   const hotDeals = filtered.filter((client) => (client.priority ?? "Medium") === "High").length;
   const conversionBase = filtered.filter((client) => client.stage !== "Leads").length || 1;
   const conversionRate = Math.round((filtered.filter((client) => ["Agreement Signed", "Client (Active)", "Post-Client"].includes(client.stage)).length / conversionBase) * 100);
   const industries = Array.from(new Set([...clients.map((client) => client.industry), "FnB", "Fitness & Wellness", "Fashion", "Beauty & Skincare", "Other"]));
-  const maxStageValue = Math.max(...stages.map((stage) => filtered.filter((client) => client.stage === stage).reduce((sum, client) => sum + client.value, 0)), 1);
+  const maxStageValue = Math.max(...stages.map((stage) => filtered.filter((client) => client.stage === stage).reduce((sum, client) => sum + getClientValue(client), 0)), 1);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const selectedServices = data.getAll("services").map(String);
-    if (!selectedServices.length) {
-      window.alert("Pilih minimal satu layanan / project.");
+    const projectNames = data.getAll("projectName").map(String);
+    const projectScopes = data.getAll("projectScope").map(String);
+    const projectFees = data.getAll("projectMonthlyFee").map(String);
+    const projectFeeNotes = data.getAll("projectFeeNote").map(String);
+    const projectContracts = data.getAll("projectContractPeriod").map(String);
+    const projectDeposits = data.getAll("projectDeposit").map(String);
+    const projectNotes = data.getAll("projectNotes").map(String);
+    const projects: ClientProject[] = projectNames
+      .map((name, index) => ({
+        id: editing?.projects?.[index]?.id || crypto.randomUUID(),
+        name: name.trim(),
+        scope: projectScopes[index]?.trim(),
+        monthlyFee: Number(projectFees[index]) || undefined,
+        feeNote: projectFeeNotes[index]?.trim(),
+        contractPeriod: projectContracts[index]?.trim(),
+        deposit: projectDeposits[index]?.trim(),
+        notes: projectNotes[index]?.trim(),
+      }))
+      .filter((project) => project.name || project.scope || project.monthlyFee || project.feeNote)
+      .map((project, index) => ({ ...project, name: project.name || `Project ${index + 1}` }));
+    if (!projects.length) {
+      window.alert("Isi minimal satu project.");
       return;
     }
+    const selectedServices = projects.map((project) => project.name);
+    const cooperationScope = String(data.get("cooperationScope")) || projects.map((project) => project.scope || project.name).join("; ");
     const client: Client = {
       id: editing?.id || crypto.randomUUID(),
       brand: String(data.get("brand")),
@@ -93,9 +132,10 @@ export default function CRMPage() {
       industry: String(data.get("industry")),
       service: selectedServices.join(", "),
       services: selectedServices,
-      cooperationScope: String(data.get("cooperationScope")),
+      projects,
+      cooperationScope,
       stage: String(data.get("stage")) as Client["stage"],
-      value: Number(data.get("value")) || 0,
+      value: totalProjectValue(projects),
       source: String(data.get("source")),
       priority: String(data.get("priority")) as Client["priority"],
       probability: Number(data.get("probability")) || 35,
@@ -211,7 +251,7 @@ export default function CRMPage() {
           <div className="flex gap-3 overflow-x-auto pb-2">
             {stages.map((stage) => {
               const items = filtered.filter((client) => client.stage === stage);
-              const stageValue = items.reduce((sum, client) => sum + client.value, 0);
+              const stageValue = items.reduce((sum, client) => sum + getClientValue(client), 0);
               return (
                 <div key={stage} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveClient(event.dataTransfer.getData("id"), stage)} className="min-h-64 w-[238px] shrink-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-950">
                   <div className="mb-3">
@@ -227,26 +267,29 @@ export default function CRMPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {items.map((client) => (
-                      <article key={client.id} draggable={clients.some((item) => item.id === client.id)} onDragStart={(event) => event.dataTransfer.setData("id", client.id)} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900">
-                        <div className="mb-3 flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <h4 className="truncate text-sm font-black">{client.brand}</h4>
-                            <p className="truncate text-[11px] text-slate-400">{client.pic}</p>
+                    {items.map((client) => {
+                      const projects = getClientProjects(client);
+                      return (
+                        <article key={client.id} draggable={clients.some((item) => item.id === client.id)} onDragStart={(event) => event.dataTransfer.setData("id", client.id)} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900">
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h4 className="truncate text-sm font-black">{client.brand}</h4>
+                              <p className="truncate text-[11px] text-slate-400">{client.pic}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Badge tone={priorityTone[client.priority ?? "Medium"]}>{client.priority ?? "Medium"}</Badge>
+                              <button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={13} /></button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Badge tone={priorityTone[client.priority ?? "Medium"]}>{client.priority ?? "Medium"}</Badge>
-                            <button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={13} /></button>
+                          <p className="line-clamp-2 min-h-8 text-xs text-slate-500 dark:text-slate-300">{projects.map((project) => project.name).join(", ") || "Project belum diisi"}</p>
+                          {projects[0]?.scope && <p className="mt-2 line-clamp-2 rounded-lg bg-slate-50 p-2 text-[11px] leading-4 text-slate-500 dark:bg-slate-950 dark:text-slate-300">{projects[0].scope}</p>}
+                          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+                            <span className="text-xs font-black text-teal-700 dark:text-teal-300">{rupiah(getClientValue(client))}</span>
+                            <span className="text-[11px] font-bold text-slate-400">{projects.length} project</span>
                           </div>
-                        </div>
-                        <p className="line-clamp-2 min-h-8 text-xs text-slate-500 dark:text-slate-300">{client.service || "Service belum dipilih"}</p>
-                        {client.cooperationScope && <p className="mt-2 line-clamp-2 rounded-lg bg-slate-50 p-2 text-[11px] leading-4 text-slate-500 dark:bg-slate-950 dark:text-slate-300">{client.cooperationScope}</p>}
-                        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-                          <span className="text-xs font-black text-teal-700 dark:text-teal-300">{rupiah(client.value)}</span>
-                          <span className="text-[11px] font-bold text-slate-400">{client.probability ?? 35}%</span>
-                        </div>
-                      </article>
-                    ))}
+                        </article>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -271,9 +314,9 @@ export default function CRMPage() {
                     </td>
                     <td className="px-4 py-4"><span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", stageMeta[client.stage].tone)}>{client.stage}</span></td>
                     <td className="px-4 py-4">{client.pic}</td>
-                    <td className="max-w-xs px-4 py-4 text-xs leading-5 text-slate-500">{client.cooperationScope || "-"}</td>
-                    <td className="px-4 py-4 font-black">{rupiah(client.value)}</td>
-                    <td className="px-4 py-4">{rupiah(client.value * ((client.probability ?? 35) / 100))}</td>
+                    <td className="max-w-xs px-4 py-4 text-xs leading-5 text-slate-500">{projectScopes(client) || "-"}</td>
+                    <td className="px-4 py-4 font-black">{rupiah(getClientValue(client))}</td>
+                    <td className="px-4 py-4">{rupiah(getClientValue(client) * ((client.probability ?? 35) / 100))}</td>
                     <td className="px-4 py-4">
                       <p className="font-bold">{client.nextAction || "Belum ada"}</p>
                       <p className="mt-1 text-xs text-slate-400">{formatDate(client.dueDate)}</p>
@@ -300,7 +343,7 @@ export default function CRMPage() {
           </div>
           <div className="space-y-4">
             {stages.map((stage) => {
-              const stageValue = filtered.filter((client) => client.stage === stage).reduce((sum, client) => sum + client.value, 0);
+              const stageValue = filtered.filter((client) => client.stage === stage).reduce((sum, client) => sum + getClientValue(client), 0);
               return (
                 <div key={stage}>
                   <div className="mb-2 flex items-center justify-between gap-3 text-xs">
@@ -337,7 +380,6 @@ export default function CRMPage() {
           {[
             ["Brand", "brand", "text"],
             ["Nama PIC", "pic", "text"],
-            ["Nilai project", "value", "number"],
             ["Source", "source", "text"],
             ["Owner", "owner", "text"],
             ["Probability (%)", "probability", "number"],
@@ -348,19 +390,43 @@ export default function CRMPage() {
               <input name={name} defaultValue={editing?.[name as keyof Client] as string | number | undefined || ""} required={["brand", "pic"].includes(name)} type={type} min={name === "probability" ? 0 : undefined} max={name === "probability" ? 100 : undefined} className={fieldClass} />
             </label>
           ))}
-          <div className="md:col-span-2">
-            <span className="mb-2 block text-xs font-bold">Layanan / project</span>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {serviceOptions.map((service) => {
-                const selected = editing?.services?.length ? editing.services : editing?.service ? editing.service.split(",").map((item) => item.trim()) : [];
-                return (
-                  <label key={service} className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 px-3 text-sm font-semibold dark:border-slate-700">
-                    <input name="services" type="checkbox" value={service} defaultChecked={selected.includes(service)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
-                    <span>{service}</span>
-                  </label>
-                );
-              })}
-            </div>
+          <div className="space-y-3 md:col-span-2">
+            <span className="block text-xs font-bold">Project client</span>
+            {projectFormRows(editing).map((project, index) => (
+              <div key={project?.id || index} className="grid gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700 md:grid-cols-2">
+                <label>
+                  <span className="mb-2 block text-xs font-bold">Project {index + 1}</span>
+                  <input name="projectName" list="project-options" defaultValue={project?.name || ""} className={fieldClass} />
+                </label>
+                <label>
+                  <span className="mb-2 block text-xs font-bold">Fee bulanan</span>
+                  <input name="projectMonthlyFee" defaultValue={project?.monthlyFee || ""} type="number" className={fieldClass} />
+                </label>
+                <label className="md:col-span-2">
+                  <span className="mb-2 block text-xs font-bold">Scope project</span>
+                  <textarea name="projectScope" defaultValue={project?.scope || ""} rows={2} className={`${fieldClass} h-auto py-3`} />
+                </label>
+                <label>
+                  <span className="mb-2 block text-xs font-bold">Periode kontrak</span>
+                  <input name="projectContractPeriod" defaultValue={project?.contractPeriod || ""} className={fieldClass} />
+                </label>
+                <label>
+                  <span className="mb-2 block text-xs font-bold">Deposit</span>
+                  <input name="projectDeposit" defaultValue={project?.deposit || ""} className={fieldClass} />
+                </label>
+                <label>
+                  <span className="mb-2 block text-xs font-bold">Fee note</span>
+                  <input name="projectFeeNote" defaultValue={project?.feeNote || ""} className={fieldClass} />
+                </label>
+                <label>
+                  <span className="mb-2 block text-xs font-bold">Catatan</span>
+                  <input name="projectNotes" defaultValue={project?.notes || ""} className={fieldClass} />
+                </label>
+              </div>
+            ))}
+            <datalist id="project-options">
+              {serviceOptions.map((service) => <option key={service} value={service} />)}
+            </datalist>
           </div>
           <label>
             <span className="mb-2 block text-xs font-bold">Industri</span>
