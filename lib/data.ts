@@ -19,6 +19,7 @@ export type Client = {
   value: number;
   service: string;
   services?: string[];
+  cooperationScope?: string;
   source?: string;
   priority?: "High" | "Medium" | "Low";
   probability?: number;

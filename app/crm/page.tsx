@@ -66,7 +66,7 @@ export default function CRMPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const filtered = clients.filter((client) => {
-    const haystack = `${client.brand} ${client.pic} ${client.service} ${client.industry}`.toLowerCase();
+    const haystack = `${client.brand} ${client.pic} ${client.service} ${client.cooperationScope || ""} ${client.industry}`.toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!industry || client.industry === industry);
   });
   const weightedPipeline = filtered.reduce((sum, client) => sum + client.value * ((client.probability ?? 45) / 100), 0);
@@ -93,6 +93,7 @@ export default function CRMPage() {
       industry: String(data.get("industry")),
       service: selectedServices.join(", "),
       services: selectedServices,
+      cooperationScope: String(data.get("cooperationScope")),
       stage: String(data.get("stage")) as Client["stage"],
       value: Number(data.get("value")) || 0,
       source: String(data.get("source")),
@@ -239,6 +240,7 @@ export default function CRMPage() {
                           </div>
                         </div>
                         <p className="line-clamp-2 min-h-8 text-xs text-slate-500 dark:text-slate-300">{client.service || "Service belum dipilih"}</p>
+                        {client.cooperationScope && <p className="mt-2 line-clamp-2 rounded-lg bg-slate-50 p-2 text-[11px] leading-4 text-slate-500 dark:bg-slate-950 dark:text-slate-300">{client.cooperationScope}</p>}
                         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
                           <span className="text-xs font-black text-teal-700 dark:text-teal-300">{rupiah(client.value)}</span>
                           <span className="text-[11px] font-bold text-slate-400">{client.probability ?? 35}%</span>
@@ -252,10 +254,10 @@ export default function CRMPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1180px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
                 <tr>
-                  {["Brand", "Journey", "PIC", "Project Value", "Forecast", "Next Action", "Owner", "Health", "Admin"].map((item) => (
+                  {["Brand", "Journey", "PIC", "Scope", "Project Value", "Forecast", "Next Action", "Owner", "Health", "Admin"].map((item) => (
                     <th key={item} className="px-4 py-3 font-black">{item}</th>
                   ))}
                 </tr>
@@ -269,6 +271,7 @@ export default function CRMPage() {
                     </td>
                     <td className="px-4 py-4"><span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", stageMeta[client.stage].tone)}>{client.stage}</span></td>
                     <td className="px-4 py-4">{client.pic}</td>
+                    <td className="max-w-xs px-4 py-4 text-xs leading-5 text-slate-500">{client.cooperationScope || "-"}</td>
                     <td className="px-4 py-4 font-black">{rupiah(client.value)}</td>
                     <td className="px-4 py-4">{rupiah(client.value * ((client.probability ?? 35) / 100))}</td>
                     <td className="px-4 py-4">
@@ -374,6 +377,10 @@ export default function CRMPage() {
           <label>
             <span className="mb-2 block text-xs font-bold">Health</span>
             <select name="health" defaultValue={editing?.health || "Green"} className={fieldClass}>{["Green", "Amber", "Red"].map((item) => <option key={item}>{item}</option>)}</select>
+          </label>
+          <label className="md:col-span-2">
+            <span className="mb-2 block text-xs font-bold">Scope kerja sama</span>
+            <textarea name="cooperationScope" defaultValue={editing?.cooperationScope || ""} rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Contoh: 12 konten feed/bulan, 8 video reels, monthly report, optimasi campaign mingguan" />
           </label>
           <label className="md:col-span-2">
             <span className="mb-2 block text-xs font-bold">Tanggal follow-up</span>

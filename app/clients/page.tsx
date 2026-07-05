@@ -72,9 +72,9 @@ export default function ClientsPage() {
         </div>
         {!directoryClients.length ? <EmptyState title="Belum ada active client" description="Deal yang masih leads, pitching, negotiation, atau agreement signed tetap ada di CRM dan akan muncul di sini setelah stage-nya Client (Active)." /> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
+            <table className="w-full min-w-[1280px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
-                <tr>{["Client", "PIC", "Stage", "Scope", "Nilai Kerja Sama", "Projected Revenue", "Owner", "Health", "Next Output"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
+                <tr>{["Client", "PIC", "Stage", "Layanan / Project", "Scope Kerja Sama", "Nilai Kerja Sama", "Projected Revenue", "Owner", "Health", "Next Output"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
               </thead>
               <tbody>
                 {directoryClients.map((client) => {
@@ -88,6 +88,7 @@ export default function ClientsPage() {
                       <td className="p-4">{client.pic}</td>
                       <td className="p-4"><Badge tone={stageTone[client.stage]}>{client.stage}</Badge></td>
                       <td className="p-4"><div className="flex flex-wrap gap-2">{projects.map((project) => <Badge key={project} tone="slate">{project}</Badge>)}</div></td>
+                      <td className="max-w-sm p-4 text-xs leading-5 text-slate-500">{client.cooperationScope || "-"}</td>
                       <td className="p-4 font-black">{rupiah(client.value)}</td>
                       <td className="p-4">{rupiah(client.value)}</td>
                       <td className="p-4">{client.owner || "GH"}</td>
