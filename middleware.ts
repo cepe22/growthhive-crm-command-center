@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { authCookies, verifySessionToken } from "@/lib/auth";
 
-export function middleware(request: NextRequest) {
-  const loggedIn = request.cookies.get("gh-session")?.value === (process.env.AUTH_SESSION_SECRET || "growthhive-temporary-session");
+export async function middleware(request: NextRequest) {
+  const loggedIn = await verifySessionToken(request.cookies.get(authCookies.session)?.value);
   const isLogin = request.nextUrl.pathname === "/login";
+  const isAuthCallback = request.nextUrl.pathname.startsWith("/auth/callback");
+  if (isAuthCallback) return NextResponse.next();
   if (!loggedIn && !isLogin) return NextResponse.redirect(new URL("/login", request.url));
   if (loggedIn && isLogin) return NextResponse.redirect(new URL("/", request.url));
   return NextResponse.next();

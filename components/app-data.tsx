@@ -42,6 +42,7 @@ type AppData = {
 
 const DataContext = createContext<AppData | null>(null);
 const activeClientSeedVersion = "gh-active-clients-2026-07-05-v1";
+const calendarCleanupVersion = "gh-calendar-cleanup-2026-07-07-v1";
 
 function mergeActiveGhClients(existing: Client[]) {
   const seededBrands = new Set(activeGhClients.map((client) => client.brand.toLowerCase()));
@@ -95,6 +96,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setClients(mergeActiveGhClients(storedClients));
     localStorage.setItem("gh-active-client-seed-version", activeClientSeedVersion);
   }, [setClients]);
+
+  useEffect(() => {
+    if (localStorage.getItem("gh-calendar-cleanup-version") === calendarCleanupVersion) return;
+    setCalendarEvents([]);
+    localStorage.setItem("gh-calendar-events-v2", "[]");
+    localStorage.setItem("gh-calendar-cleanup-version", calendarCleanupVersion);
+  }, [setCalendarEvents]);
 
   return (
     <DataContext.Provider
