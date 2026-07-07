@@ -23,11 +23,11 @@ export const financial2025: FinancialReport = {
 };
 
 export const financial2026: FinancialReport = {
-  year:"2026",status:"Year to date",source:"Reporting GHI 2026.xlsx",sourceUrl:"https://docs.google.com/spreadsheets/d/1-_zuWzIJJjakZnbyujjEwvff_Qq6Rwsw/edit",period:"Januari - April 2026",
-  revenue:215315087,costOfRevenue:12700000,operatingExpenses:229680959,totalExpenses:242380959,operatingProfit:-27065872,tax:0,netIncome:-27065872,netMargin:-.1257035556,
-  months:[{month:"Jan",revenue:62363173,expenses:67080571,netIncome:-4717398},{month:"Feb",revenue:61979000,expenses:60207991,netIncome:1771009},{month:"Mar",revenue:50575914,expenses:71342291,netIncome:-20766377},{month:"Apr",revenue:40397000,expenses:43750106,netIncome:-3353106}],
-  expenseCategories:[{label:"Biaya Gaji",amount:163740000},{label:"Professional Fee",amount:33746155},{label:"Biaya Produksi",amount:12700000},{label:"THR",amount:11000000},{label:"Tunjangan PPh 21",amount:8059642},{label:"Iklan & Promosi",amount:6250000},{label:"Biaya Sewa",amount:4000000},{label:"Transportasi & Perjalanan Dinas",amount:1591700},{label:"Meeting",amount:652630},{label:"Penyusutan",amount:458332},{label:"Administrasi Bank",amount:182500}],
-  balanceSheet:{cash:66164252,receivables:59899297,prepaidTax:0,totalAssets:129844804,taxPayable:4357769,capital:33917833,currentProfit:-27065872,retainedEarnings:67749360,unearnedRevenue:50885714,totalLiabilitiesEquity:129844804},
+  year:"2026",status:"Year to date",source:"Reporting GHI 2026.xlsx",sourceUrl:"https://docs.google.com/spreadsheets/d/1-_zuWzIJJjakZnbyujjEwvff_Qq6Rwsw/edit",period:"Januari - Mei 2026",
+  revenue:247003087,costOfRevenue:14100000,operatingExpenses:264702650,totalExpenses:278802650,operatingProfit:-32372478,tax:0,netIncome:-32372478,netMargin:-.131061026,
+  months:[{month:"Jan",revenue:62363173,expenses:67080571,netIncome:-4717398},{month:"Feb",revenue:61979000,expenses:60207991,netIncome:1771009},{month:"Mar",revenue:50575914,expenses:71342291,netIncome:-20766377},{month:"Apr",revenue:40397000,expenses:43750106,netIncome:-3353106},{month:"Mei",revenue:31688000,expenses:36994606,netIncome:-5306606}],
+  expenseCategories:[{label:"Biaya Gaji",amount:192925000},{label:"Professional Fee",amount:36923078},{label:"Biaya Produksi",amount:14100000},{label:"THR",amount:11000000},{label:"Iklan & Promosi",amount:9050000},{label:"Tunjangan PPh 21",amount:8345242},{label:"Biaya Sewa",amount:4000000},{label:"Transportasi & Perjalanan Dinas",amount:1591700},{label:"Meeting",amount:652630},{label:"Penyusutan",amount:572915},{label:"Administrasi Bank",amount:215000}],
+  balanceSheet:{cash:54749729,receivables:64549297,prepaidTax:0,totalAssets:122965698,taxPayable:4285269,capital:33917833,currentProfit:-32372478,retainedEarnings:67749360,unearnedRevenue:49385714,totalLiabilitiesEquity:122965698},
 };
 
 export const financialReports = {"2024":financial2024,"2025":financial2025,"2026":financial2026};
