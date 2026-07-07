@@ -1,6 +1,6 @@
 "use client";
 
-import { activeGhClients, type Client, type Expense, type Invoice } from "@/lib/data";
+import { activeGhClients, type Client, type Expense, type Invoice, type Reimbursement } from "@/lib/data";
 import {
   appCalendarEvents as initialCalendarEvents,
   dailyWorkPlans as initialDailyWorkPlans,
@@ -22,6 +22,7 @@ type AppData = {
   teamMembers: TeamMember[];
   invoices: Invoice[];
   expenses: Expense[];
+  reimbursements: Reimbursement[];
   addClient: (client: Client) => void;
   updateClient: (id: string, client: Client) => void;
   moveClient: (id: string, stage: Client["stage"]) => void;
@@ -38,6 +39,8 @@ type AppData = {
   updateInvoice: (id: string, invoice: Invoice) => void;
   deleteInvoice: (id: string) => void;
   addExpense: (expense: Expense) => void;
+  addReimbursement: (reimbursement: Reimbursement) => void;
+  updateReimbursement: (id: string, reimbursement: Reimbursement) => void;
 };
 
 const DataContext = createContext<AppData | null>(null);
@@ -81,6 +84,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [teamMembers, setTeamMembers] = useStoredState<TeamMember[]>("gh-team-members-v3", initialTeamMembers);
   const [invoices, setInvoices] = useStoredState<Invoice[]>("gh-invoices", []);
   const [expenses, setExpenses] = useStoredState<Expense[]>("gh-expenses", []);
+  const [reimbursements, setReimbursements] = useStoredState<Reimbursement[]>("gh-reimbursements-v1", []);
 
   useEffect(() => {
     if (localStorage.getItem("gh-active-client-seed-version") === activeClientSeedVersion) return;
@@ -114,6 +118,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         teamMembers,
         invoices,
         expenses,
+        reimbursements,
         addClient: (client) => setClients((items) => [...items, client]),
         updateClient: (id, client) => setClients((items) => items.map((item) => (item.id === id ? client : item))),
         moveClient: (id, stage) => setClients((items) => items.map((client) => (client.id === id ? { ...client, stage } : client))),
@@ -130,6 +135,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         updateInvoice: (id, invoice) => setInvoices((items) => items.map((item) => (item.id === id ? invoice : item))),
         deleteInvoice: (id) => setInvoices((items) => items.filter((invoice) => invoice.id !== id)),
         addExpense: (expense) => setExpenses((items) => [expense, ...items]),
+        addReimbursement: (reimbursement) => setReimbursements((items) => [reimbursement, ...items]),
+        updateReimbursement: (id, reimbursement) => setReimbursements((items) => items.map((item) => (item.id === id ? reimbursement : item))),
       }}
     >
       {children}

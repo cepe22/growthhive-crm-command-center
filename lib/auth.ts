@@ -5,6 +5,10 @@ export const allowedTeamEmails = [
   "growthiveofficial@gmail.com",
 ] as const;
 
+export const adminEmails = ["growthiveofficial@gmail.com"] as const;
+
+export type UserAccess = "admin" | "team";
+
 const sessionCookieName = "gh-session";
 const userEmailCookieName = "gh-user-email";
 const maxAgeSeconds = 60 * 60 * 24 * 7;
@@ -35,6 +39,16 @@ async function hmac(value: string) {
 export function isAllowedEmail(email?: string | null) {
   if (!email) return false;
   return allowedTeamEmails.includes(normalizeEmail(email) as (typeof allowedTeamEmails)[number]);
+}
+
+export function isAdminEmail(email?: string | null) {
+  if (!email) return false;
+  return adminEmails.includes(normalizeEmail(email) as (typeof adminEmails)[number]);
+}
+
+export function getUserAccess(email?: string | null): UserAccess | null {
+  if (!isAllowedEmail(email)) return null;
+  return isAdminEmail(email) ? "admin" : "team";
 }
 
 export async function createSessionToken(email: string) {

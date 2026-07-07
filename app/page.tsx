@@ -4,10 +4,12 @@ import { useAppData } from "@/components/app-data";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { Badge, Card } from "@/components/ui";
+import { getUserAccess } from "@/lib/auth";
 import { getClientValue, stages } from "@/lib/data";
 import { rupiah } from "@/lib/utils";
-import { BriefcaseBusiness, CalendarCheck2, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall } from "lucide-react";
+import { BriefcaseBusiness, CalendarCheck2, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall, ReceiptText, UsersRound } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const dayMs = 24 * 60 * 60 * 1000;
 
@@ -24,7 +26,12 @@ function dueLabel(today: string, dueDate: string) {
 }
 
 export default function Dashboard() {
-  const { clients, projectTasks, dailyWorkPlans, calendarEvents, invoices } = useAppData();
+  const { clients, projectTasks, dailyWorkPlans, calendarEvents, invoices, reimbursements } = useAppData();
+  const [email, setEmail] = useState("");
+  useEffect(() => {
+    fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
+  }, []);
+  const access = getUserAccess(email);
   const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
   const openPipeline = clients.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
@@ -32,12 +39,22 @@ export default function Dashboard() {
   const today = new Date().toISOString().slice(0, 10);
   const todayPlans = dailyWorkPlans.filter((plan) => plan.date === today).length;
   const acceptedEvents = calendarEvents.filter((event) => Object.values(event.responses).some((response) => response === "Accepted")).length;
+  const activeClients = clients.filter((client) => client.stage === "Client (Active)").length;
+  const visibleReimbursements = access === "admin" ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
+  const pendingReimbursements = visibleReimbursements.filter((item) => ["Diajukan", "Diproses", "Disetujui"].includes(item.status)).length;
   const stats = [
     { label: "Task Aktif", value: String(activeProjects), icon: BriefcaseBusiness },
     { label: "Work Plan Hari Ini", value: String(todayPlans), icon: CalendarCheck2 },
     { label: "CRM Pipeline", value: rupiah(openPipeline), icon: CreditCard },
     { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
     { label: "Belum Terbayar", value: rupiah(total - paid), icon: Clock3 },
+  ];
+  const teamStats = [
+    { label: "Task Aktif", value: String(activeProjects), icon: BriefcaseBusiness },
+    { label: "Work Plan Hari Ini", value: String(todayPlans), icon: CalendarCheck2 },
+    { label: "Active Client", value: String(activeClients), icon: UsersRound },
+    { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
+    { label: "Reimbursement Proses", value: String(pendingReimbursements), icon: ReceiptText },
   ];
 
   const upcomingItems = [
@@ -64,6 +81,87 @@ export default function Dashboard() {
         icon: ListChecks,
       })),
   ].sort((a, b) => new Date(`${a.dueDate}T00:00:00`).getTime() - new Date(`${b.dueDate}T00:00:00`).getTime()).slice(0, 6);
+
+  const teamUpcomingItems = upcomingItems.filter((item) => item.type === "Task");
+
+  if (access === "team") {
+    return (
+      <>
+        <Header title="Dashboard Tim" subtitle="Ringkasan pekerjaan, jadwal, dan kebutuhan operasional yang bisa kamu akses." />
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {teamStats.map(({ label, value, icon: Icon }) => (
+            <Card key={label} className="p-5">
+              <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-700"><Icon size={20} /></div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p>
+              <p className="mt-2 text-xl font-black text-ink dark:text-white">{value}</p>
+            </Card>
+          ))}
+        </section>
+
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_1fr]">
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div>
+                <h2 className="font-black">Task Terdekat</h2>
+                <p className="text-xs text-slate-400">Prioritas dari Project Hub berdasarkan deadline</p>
+              </div>
+              <Link href="/client-management" className="text-xs font-bold text-teal-600">Project Hub</Link>
+            </div>
+            {!teamUpcomingItems.length ? (
+              <EmptyState title="Belum ada task terjadwal" description="Task dari Project Hub akan muncul di sini ketika memiliki deadline." />
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {teamUpcomingItems.map((item) => {
+                  const Icon = item.icon;
+                  const distance = daysUntil(today, item.dueDate);
+                  return (
+                    <Link key={item.id} href={item.href} className="flex flex-wrap items-center gap-4 p-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><Icon size={18} /></div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone="teal">Task</Badge>
+                          <span className="text-xs font-bold text-slate-400">{item.dueDate}</span>
+                        </div>
+                        <p className="mt-2 truncate font-black text-ink dark:text-white">{item.title}</p>
+                        <p className="mt-1 truncate text-xs text-slate-400">{item.context}</p>
+                      </div>
+                      <Badge tone={distance < 0 ? "red" : distance <= 1 ? "amber" : "slate"}>{dueLabel(today, item.dueDate)}</Badge>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-black">Reimbursement</h2>
+                <p className="text-xs text-slate-400">Status pengajuan operasional kamu</p>
+              </div>
+              <Link href="/reimbursements" className="text-xs font-bold text-teal-600">Ajukan</Link>
+            </div>
+            {!visibleReimbursements.length ? (
+              <EmptyState title="Belum ada pengajuan" description="Ajukan reimbursement operasional dari halaman Reimbursement." />
+            ) : (
+              <div className="space-y-3">
+                {visibleReimbursements.slice(0, 4).map((item) => (
+                  <Link href="/reimbursements" key={item.id} className="block rounded-lg border border-slate-100 p-3 text-sm transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="truncate font-black">{item.category}</p>
+                      <Badge tone={item.status === "Ditolak" ? "red" : item.status === "Diajukan" || item.status === "Diproses" ? "amber" : "teal"}>{item.status}</Badge>
+                    </div>
+                    <p className="mt-2 text-xs font-bold text-slate-500">{rupiah(item.amount)}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-400">{item.description}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Card>
+        </section>
+      </>
+    );
+  }
 
   return (
     <>

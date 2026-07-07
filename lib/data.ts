@@ -224,6 +224,25 @@ export type Expense = {
   amount: number;
 };
 
+export type ReimbursementStatus = "Diajukan" | "Diproses" | "Disetujui" | "Ditolak" | "Dibayar";
+
+export type Reimbursement = {
+  id: string;
+  requesterEmail: string;
+  requesterName: string;
+  date: string;
+  category: string;
+  project?: string;
+  client?: string;
+  amount: number;
+  description: string;
+  receiptLink?: string;
+  status: ReimbursementStatus;
+  submittedAt: string;
+  notes?: string;
+};
+
 export const clients: Client[] = activeGhClients;
 export const invoices: Invoice[] = [];
 export const expenses: Expense[] = [];
+export const reimbursements: Reimbursement[] = [];
