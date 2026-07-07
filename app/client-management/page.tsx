@@ -9,7 +9,6 @@ import {
   teamRoles,
   zooAvatars,
   type AppCalendarEvent,
-  type DailyWorkPlan,
   type EventResponse,
   type ProjectPriority,
   type ProjectStatus,
@@ -18,7 +17,6 @@ import {
   type TaskNotification,
   type TeamMember,
   type TeamRole,
-  type WorkPlanStatus,
 } from "@/lib/client-projects";
 import { getUserAccess } from "@/lib/auth";
 import { getClientProjects } from "@/lib/data";
@@ -32,7 +30,6 @@ import {
   ChevronRight,
   Clock3,
   Columns3,
-  ListChecks,
   Lock,
   Mail,
   MessageSquareText,
@@ -60,13 +57,6 @@ const priorityTone: Record<ProjectPriority, "red" | "amber" | "slate"> = {
   High: "red",
   Medium: "amber",
   Low: "slate",
-};
-
-const planTone: Record<WorkPlanStatus, "teal" | "amber" | "red" | "slate"> = {
-  Focus: "teal",
-  Review: "amber",
-  Blocked: "red",
-  Done: "slate",
 };
 
 const reminderOffsets = new Set([3, 1, 0, -1]);
@@ -147,7 +137,6 @@ function memberProjectKeywords(member?: TeamMember) {
 export default function ClientManagementPage() {
   const {
     projectTasks,
-    dailyWorkPlans,
     calendarEvents,
     teamMembers,
     clients,
@@ -156,19 +145,16 @@ export default function ClientManagementPage() {
     addProjectTask,
     updateProjectTask,
     moveProjectTask,
-    saveDailyWorkPlans,
-    addDailyWorkPlan,
     saveCalendarEvents,
     addCalendarEvent,
     saveTeamMembers,
     addTaskNotification,
     updateTaskNotification,
   } = useAppData();
-  const [view, setView] = useState<"board" | "timeline" | "clients" | "workplan" | "calendar">("board");
+  const [view, setView] = useState<"board" | "timeline" | "clients" | "calendar">("board");
   const [taskModal, setTaskModal] = useState(false);
   const [progressModal, setProgressModal] = useState(false);
   const [commentModal, setCommentModal] = useState(false);
-  const [planModal, setPlanModal] = useState(false);
   const [eventModal, setEventModal] = useState(false);
   const [memberModal, setMemberModal] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
@@ -212,7 +198,6 @@ export default function ClientManagementPage() {
     const distance = daysBetween(today(), task.dueDate);
     return task.status !== "Done" && distance <= 7;
   }).length;
-  const plansToday = dailyWorkPlans.filter((plan) => plan.date === selectedDate);
   const appEventsToday = calendarEvents.filter((event) => event.date === selectedDate);
   const myNotifications = currentMember ? taskNotifications.filter((notification) => notification.recipientId === currentMember.id) : [];
   const unreadNotifications = myNotifications.filter((notification) => !notification.read).length;
@@ -336,21 +321,6 @@ export default function ClientManagementPage() {
     setEditingTask(null);
   }
 
-  function submitPlan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    addDailyWorkPlan({
-      id: crypto.randomUUID(),
-      userId: String(data.get("userId")),
-      date: String(data.get("date")),
-      focus: String(data.get("focus")),
-      tasks: String(data.get("tasks")),
-      blocker: String(data.get("blocker")),
-      status: String(data.get("status")) as WorkPlanStatus,
-    });
-    setPlanModal(false);
-  }
-
   function submitEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -450,17 +420,13 @@ export default function ClientManagementPage() {
     updateTaskNotification(notification.id, { ...notification, read: true });
   }
 
-  function removePlan(plan: DailyWorkPlan) {
-    saveDailyWorkPlans(dailyWorkPlans.filter((item) => item.id !== plan.id));
-  }
-
   function respondToEvent(eventId: string, memberId: string, response: EventResponse) {
     saveCalendarEvents(calendarEvents.map((event) => event.id === eventId ? { ...event, responses: { ...event.responses, [memberId]: response } } : event));
   }
 
   return (
     <>
-      <Header title="GH Project Hub" subtitle="Board, timeline, work plan, dan meeting kerja tim GrowthHive." />
+      <Header title="GH Project Hub" subtitle="Board, timeline, clients, dan meeting kerja tim GrowthHive." />
 
       <Card className="mb-5 overflow-hidden rounded-lg">
         <div className="flex flex-wrap items-center justify-between gap-3 p-5">
@@ -504,12 +470,11 @@ export default function ClientManagementPage() {
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-rose-700">
               <Sparkles size={13} /> Shared Workspace
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {[
                 { label: "Active Task", value: activeTasks.length, color: "bg-teal-100 text-teal-800", icon: Columns3 },
                 { label: "Deadline 7 Hari", value: dueThisWeek, color: "bg-amber-100 text-amber-800", icon: Clock3 },
                 { label: "Active Client", value: visibleActiveClients.length, color: "bg-emerald-100 text-emerald-800", icon: UsersRound },
-                { label: "Work Plan", value: plansToday.length, color: "bg-sky-100 text-sky-800", icon: ListChecks },
               ].map(({ label, value, color, icon: Icon }) => (
                 <div key={label} className="rounded-lg border border-white bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950">
                   <div className={cn("mb-4 grid h-10 w-10 place-items-center rounded-lg", color)}><Icon size={18} /></div>
@@ -548,7 +513,6 @@ export default function ClientManagementPage() {
             { id: "board", label: "Board", icon: Columns3 },
             { id: "timeline", label: "Timeline", icon: ChartGantt },
             { id: "clients", label: "Clients", icon: UsersRound },
-            { id: "workplan", label: "Work Plan", icon: ListChecks },
             { id: "calendar", label: "Calendar", icon: CalendarDays },
           ].map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setView(id as typeof view)} className={cn("inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-black transition", view === id ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800")}>
@@ -558,7 +522,6 @@ export default function ClientManagementPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={openNewTask}><Plus size={16} />Task</Button>
-          <Button variant="outline" onClick={() => setPlanModal(true)}><ListChecks size={16} />Work Plan</Button>
           <Button variant="outline" onClick={() => setEventModal(true)}><CalendarPlus size={16} />Event</Button>
         </div>
       </section>
@@ -661,40 +624,6 @@ export default function ClientManagementPage() {
             </div>
           )}
         </Card>
-      )}
-
-      {view === "workplan" && (
-        <section className="grid gap-5 xl:grid-cols-[260px_1fr]">
-          <Card className="rounded-lg p-5">
-            <label>
-              <span className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-400">Tanggal</span>
-              <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className={fieldClass} />
-            </label>
-            <div className="mt-5 space-y-3">
-              {teamMembers.map((member) => (
-                <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
-                  <Avatar member={member} />
-                  <Badge tone="slate">{dailyWorkPlans.filter((plan) => plan.userId === member.id && plan.date === selectedDate).length}</Badge>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {plansToday.map((plan) => (
-              <Card key={plan.id} className="rounded-lg p-4">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <Avatar member={memberById(plan.userId)} />
-                  <button onClick={() => removePlan(plan)} title="Hapus work plan" className="grid h-8 w-8 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50"><Trash2 size={14} /></button>
-                </div>
-                <Badge tone={planTone[plan.status]}>{plan.status}</Badge>
-                <h3 className="mt-3 font-black">{plan.focus}</h3>
-                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-500 dark:text-slate-300">{plan.tasks}</p>
-                {plan.blocker && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-bold text-rose-700">{plan.blocker}</p>}
-              </Card>
-            ))}
-            {!plansToday.length && <EmptyProjectState />}
-          </div>
-        </section>
       )}
 
       {view === "calendar" && (
@@ -826,20 +755,6 @@ export default function ClientManagementPage() {
           </div>
           <Button className="w-full">Simpan Komentar PIC</Button>
         </form>}
-      </Modal>
-
-      <Modal open={planModal} title="Isi Work Plan Harian" onClose={() => setPlanModal(false)}>
-        <form onSubmit={submitPlan} className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <input name="date" type="date" defaultValue={selectedDate} className={fieldClass} />
-            <select name="userId" className={fieldClass}>{teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
-          </div>
-          <input name="focus" required className={fieldClass} placeholder="Fokus utama hari ini" />
-          <textarea name="tasks" required rows={5} className={`${fieldClass} h-auto py-3`} placeholder="Daftar pekerjaan" />
-          <input name="blocker" className={fieldClass} placeholder="Blocker, opsional" />
-          <select name="status" className={fieldClass}>{(["Focus", "Review", "Blocked", "Done"] as WorkPlanStatus[]).map((status) => <option key={status}>{status}</option>)}</select>
-          <Button className="w-full">Simpan Work Plan</Button>
-        </form>
       </Modal>
 
       <Modal open={eventModal} title="Buat Event Kerja" onClose={() => setEventModal(false)}>

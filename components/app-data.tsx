@@ -48,7 +48,7 @@ type AppData = {
 };
 
 const DataContext = createContext<AppData | null>(null);
-const activeClientSeedVersion = "gh-active-clients-2026-07-05-v1";
+const activeClientSeedVersion = "gh-active-clients-2026-07-07-v2";
 const calendarCleanupVersion = "gh-calendar-cleanup-2026-07-07-v1";
 const teamEmailSyncVersion = "gh-team-email-sync-2026-07-07-v1";
 

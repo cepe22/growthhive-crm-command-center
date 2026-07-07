@@ -8,7 +8,7 @@ import { getUserAccess } from "@/lib/auth";
 import { getClientProjects, getClientValue, stages } from "@/lib/data";
 import type { TeamMember } from "@/lib/client-projects";
 import { rupiah } from "@/lib/utils";
-import { BriefcaseBusiness, CalendarCheck2, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall, ReceiptText, UsersRound } from "lucide-react";
+import { BriefcaseBusiness, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall, ReceiptText, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -41,7 +41,7 @@ function memberProjectKeywords(member?: TeamMember) {
 }
 
 export default function Dashboard() {
-  const { clients, projectTasks, dailyWorkPlans, calendarEvents, invoices, reimbursements, teamMembers } = useAppData();
+  const { clients, projectTasks, calendarEvents, invoices, reimbursements, teamMembers } = useAppData();
   const [email, setEmail] = useState("");
   useEffect(() => {
     fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
@@ -60,24 +60,20 @@ export default function Dashboard() {
   const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
   const openPipeline = clients.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
-  const activeProjects = projectTasks.filter((task) => task.status !== "Done").length;
   const visibleActiveProjects = visibleProjectTasks.filter((task) => task.status !== "Done").length;
   const today = new Date().toISOString().slice(0, 10);
-  const todayPlans = dailyWorkPlans.filter((plan) => plan.date === today).length;
   const acceptedEvents = calendarEvents.filter((event) => Object.values(event.responses).some((response) => response === "Accepted")).length;
   const activeClients = visibleActiveClients.length;
   const visibleReimbursements = access === "admin" ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
   const pendingReimbursements = visibleReimbursements.filter((item) => ["Diajukan", "Diproses", "Disetujui"].includes(item.status)).length;
   const stats = [
     { label: "Task Aktif", value: String(visibleActiveProjects), icon: BriefcaseBusiness },
-    { label: "Work Plan Hari Ini", value: String(todayPlans), icon: CalendarCheck2 },
     { label: "CRM Pipeline", value: rupiah(openPipeline), icon: CreditCard },
     { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
     { label: "Belum Terbayar", value: rupiah(total - paid), icon: Clock3 },
   ];
   const teamStats = [
-    { label: "Task Aktif", value: String(activeProjects), icon: BriefcaseBusiness },
-    { label: "Work Plan Hari Ini", value: String(todayPlans), icon: CalendarCheck2 },
+    { label: "Task Aktif", value: String(visibleActiveProjects), icon: BriefcaseBusiness },
     { label: "Active Client", value: String(activeClients), icon: UsersRound },
     { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
     { label: "Reimbursement Proses", value: String(pendingReimbursements), icon: ReceiptText },
@@ -114,7 +110,7 @@ export default function Dashboard() {
     return (
       <>
         <Header title="Dashboard Tim" subtitle="Ringkasan pekerjaan, jadwal, dan kebutuhan operasional yang bisa kamu akses." />
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {teamStats.map(({ label, value, icon: Icon }) => (
             <Card key={label} className="p-5">
               <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-700"><Icon size={20} /></div>
@@ -192,7 +188,7 @@ export default function Dashboard() {
   return (
     <>
       <Header title="Selamat pagi, Christopher" subtitle="Berikut ringkasan bisnis GrowthHive hari ini." />
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map(({ label, value, icon: Icon }) => (
           <Card key={label} className="p-5">
             <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-700"><Icon size={20} /></div>

@@ -119,6 +119,7 @@ export const activeGhClients: Client[] = [
     pic: "-",
     industry: "FnB",
     cooperationScope: "Social Media Agency; Meta Ads Management",
+    nextAction: "Output bulanan: 7 video dan 8 feeds",
     projects: [
       { id: "gh-project-agbj-social", name: "Social Media Agency", scope: "Social Media Agency", monthlyFee: 8000000, deposit: "-", contractPeriod: "No contract, renewed every month" },
       { id: "gh-project-agbj-meta", name: "Meta Ads Management", scope: "Meta Ads Management", monthlyFee: 2500000, deposit: "-", contractPeriod: "No contract, renewed every month" },
@@ -175,6 +176,7 @@ export const activeGhClients: Client[] = [
     industry: "FnB",
     cooperationScope: "Social Media Agency",
     notes: "Deposit 1 bulan",
+    nextAction: "Output bulanan: 10 konten, terdiri dari 4 video shoot, 4 feed, dan 2 video motion graphic",
     projects: [
       { id: "gh-project-melcis-social", name: "Social Media Agency", scope: "Social Media Agency", monthlyFee: 5750000, notes: "Deposit 1 bulan" },
     ],
@@ -186,6 +188,7 @@ export const activeGhClients: Client[] = [
     industry: "FnB",
     cooperationScope: "Social Media Agency",
     notes: "Sudah DP, perkiraan berjalan",
+    nextAction: "Output bulanan: 11 konten, terdiri dari 6 single feed, 3 feed carousel, dan 2 video animasi/motion graphic",
     projects: [
       { id: "gh-project-king-ayamku-social", name: "Social Media Agency", scope: "Social Media Agency", monthlyFee: 1500000, notes: "Sudah DP, perkiraan berjalan" },
     ],
