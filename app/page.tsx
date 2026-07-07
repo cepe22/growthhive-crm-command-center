@@ -5,13 +5,16 @@ import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { Badge, Card } from "@/components/ui";
 import { getUserAccess } from "@/lib/auth";
-import { getClientValue, stages } from "@/lib/data";
+import { getClientProjects, getClientValue, stages } from "@/lib/data";
+import type { TeamMember } from "@/lib/client-projects";
 import { rupiah } from "@/lib/utils";
 import { BriefcaseBusiness, CalendarCheck2, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall, ReceiptText, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const dayMs = 24 * 60 * 60 * 1000;
+const socialMediaKeywords = ["social media", "content", "production"];
+const adsMarketplaceKeywords = ["meta ads", "shopee", "tiktok", "marketplace", "ads growth", "ads management"];
 
 function daysUntil(from: string, to: string) {
   return Math.ceil((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / dayMs);
@@ -25,25 +28,48 @@ function dueLabel(today: string, dueDate: string) {
   return `${distance} hari lagi`;
 }
 
+function textMatchesKeywords(value: string, keywords: string[]) {
+  const normalized = value.toLowerCase();
+  return keywords.some((keyword) => normalized.includes(keyword));
+}
+
+function memberProjectKeywords(member?: TeamMember) {
+  if (!member) return [];
+  if (member.id === "tm-inaya" || member.id === "tm-sellina") return socialMediaKeywords;
+  if (member.id === "tm-joshua") return adsMarketplaceKeywords;
+  return [];
+}
+
 export default function Dashboard() {
-  const { clients, projectTasks, dailyWorkPlans, calendarEvents, invoices, reimbursements } = useAppData();
+  const { clients, projectTasks, dailyWorkPlans, calendarEvents, invoices, reimbursements, teamMembers } = useAppData();
   const [email, setEmail] = useState("");
   useEffect(() => {
     fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
   }, []);
   const access = getUserAccess(email);
+  const currentMember = teamMembers.find((member) => member.email.toLowerCase() === email.toLowerCase()) || (access === "admin" ? teamMembers[0] : undefined);
+  const allowedProjectKeywords = access === "admin" ? [] : memberProjectKeywords(currentMember);
+  const canSeeProjectName = (projectName: string) => access === "admin" || textMatchesKeywords(projectName, allowedProjectKeywords);
+  const visibleActiveClients = clients.filter((client) => client.stage === "Client (Active)" && (access === "admin" || getClientProjects(client).some((project) => canSeeProjectName(`${project.name} ${project.scope || ""}`))));
+  const visibleProjectTasks = projectTasks.filter((task) => {
+    if (access === "admin") return true;
+    if (!currentMember) return false;
+    if ([task.assigneeId, task.assignedById, task.watcherId].includes(currentMember.id)) return true;
+    return canSeeProjectName(task.project);
+  });
   const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
   const openPipeline = clients.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
   const activeProjects = projectTasks.filter((task) => task.status !== "Done").length;
+  const visibleActiveProjects = visibleProjectTasks.filter((task) => task.status !== "Done").length;
   const today = new Date().toISOString().slice(0, 10);
   const todayPlans = dailyWorkPlans.filter((plan) => plan.date === today).length;
   const acceptedEvents = calendarEvents.filter((event) => Object.values(event.responses).some((response) => response === "Accepted")).length;
-  const activeClients = clients.filter((client) => client.stage === "Client (Active)").length;
+  const activeClients = visibleActiveClients.length;
   const visibleReimbursements = access === "admin" ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
   const pendingReimbursements = visibleReimbursements.filter((item) => ["Diajukan", "Diproses", "Disetujui"].includes(item.status)).length;
   const stats = [
-    { label: "Task Aktif", value: String(activeProjects), icon: BriefcaseBusiness },
+    { label: "Task Aktif", value: String(visibleActiveProjects), icon: BriefcaseBusiness },
     { label: "Work Plan Hari Ini", value: String(todayPlans), icon: CalendarCheck2 },
     { label: "CRM Pipeline", value: rupiah(openPipeline), icon: CreditCard },
     { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
@@ -69,7 +95,7 @@ export default function Dashboard() {
         href: "/crm",
         icon: PhoneCall,
       })),
-    ...projectTasks
+    ...(access === "team" ? visibleProjectTasks : projectTasks)
       .filter((task) => task.status !== "Done")
       .map((task) => ({
         id: `task-${task.id}`,

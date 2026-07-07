@@ -70,6 +70,8 @@ const planTone: Record<WorkPlanStatus, "teal" | "amber" | "red" | "slate"> = {
 };
 
 const reminderOffsets = new Set([3, 1, 0, -1]);
+const socialMediaKeywords = ["social media", "content", "production"];
+const adsMarketplaceKeywords = ["meta ads", "shopee", "tiktok", "marketplace", "ads growth", "ads management"];
 
 const avatarEmoji: Record<string, string> = {
   Lion: "🦁",
@@ -130,6 +132,18 @@ function getGoogleCalendarUrl(event: AppCalendarEvent, attendees: TeamMember[]) 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+function textMatchesKeywords(value: string, keywords: string[]) {
+  const normalized = value.toLowerCase();
+  return keywords.some((keyword) => normalized.includes(keyword));
+}
+
+function memberProjectKeywords(member?: TeamMember) {
+  if (!member) return [];
+  if (member.id === "tm-inaya" || member.id === "tm-sellina") return socialMediaKeywords;
+  if (member.id === "tm-joshua") return adsMarketplaceKeywords;
+  return [];
+}
+
 export default function ClientManagementPage() {
   const {
     projectTasks,
@@ -172,14 +186,29 @@ export default function ClientManagementPage() {
   const canProgressTask = (task: ProjectTask) => Boolean(currentMember && task.assigneeId === currentMember.id);
   const canCommentTask = (task: ProjectTask) => Boolean(currentMember && task.watcherId === currentMember.id);
   const activeClients = clients.filter((client) => client.stage === "Client (Active)");
-  const projectOptions = Array.from(new Set(activeClients.flatMap((client) => getClientProjects(client).map((project) => project.name))));
-  const clientOptions = activeClients.map((client) => client.brand);
+  const allowedProjectKeywords = isAdmin ? [] : memberProjectKeywords(currentMember);
+  const canSeeProjectName = (projectName: string) => isAdmin || textMatchesKeywords(projectName, allowedProjectKeywords);
+  const visibleClientProjects = (client: (typeof activeClients)[number]) => {
+    const projects = getClientProjects(client);
+    if (isAdmin) return projects;
+    return projects.filter((project) => canSeeProjectName(`${project.name} ${project.scope || ""}`));
+  };
+  const visibleActiveClients = activeClients.filter((client) => visibleClientProjects(client).length > 0);
+  const canSeeTask = (task: ProjectTask) => {
+    if (isAdmin) return true;
+    if (!currentMember) return false;
+    if ([task.assigneeId, task.assignedById, task.watcherId].includes(currentMember.id)) return true;
+    return canSeeProjectName(task.project);
+  };
+  const visibleProjectTasks = projectTasks.filter(canSeeTask);
+  const projectOptions = Array.from(new Set(visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name))));
+  const clientOptions = visibleActiveClients.map((client) => client.brand);
   const assigners = teamMembers.filter((member) => member.id === "tm-christopher" || member.id === "tm-inaya");
   const defaultAssigner = assigners.find((member) => member.id === currentMember?.id) || assigners[0] || teamMembers[0];
   const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
   const taskClientOptions = Array.from(new Set([...(editingTask?.client ? [editingTask.client] : []), ...clientOptions]));
-  const activeTasks = projectTasks.filter((task) => task.status !== "Done");
-  const dueThisWeek = projectTasks.filter((task) => {
+  const activeTasks = visibleProjectTasks.filter((task) => task.status !== "Done");
+  const dueThisWeek = visibleProjectTasks.filter((task) => {
     const distance = daysBetween(today(), task.dueDate);
     return task.status !== "Done" && distance <= 7;
   }).length;
@@ -188,9 +217,9 @@ export default function ClientManagementPage() {
   const myNotifications = currentMember ? taskNotifications.filter((notification) => notification.recipientId === currentMember.id) : [];
   const unreadNotifications = myNotifications.filter((notification) => !notification.read).length;
   const timeline = useMemo(() => {
-    const base = projectTasks.length ? projectTasks.map((task) => task.dueDate).sort()[0] : today();
-    return { base, span: Math.max(14, ...projectTasks.map((task) => dateOffset(base, task.dueDate) + 1)) };
-  }, [projectTasks]);
+    const base = visibleProjectTasks.length ? visibleProjectTasks.map((task) => task.dueDate).sort()[0] : today();
+    return { base, span: Math.max(14, ...visibleProjectTasks.map((task) => dateOffset(base, task.dueDate) + 1)) };
+  }, [visibleProjectTasks]);
 
   useEffect(() => {
     fetch("/api/session")
@@ -479,7 +508,7 @@ export default function ClientManagementPage() {
               {[
                 { label: "Active Task", value: activeTasks.length, color: "bg-teal-100 text-teal-800", icon: Columns3 },
                 { label: "Deadline 7 Hari", value: dueThisWeek, color: "bg-amber-100 text-amber-800", icon: Clock3 },
-                { label: "Active Client", value: activeClients.length, color: "bg-emerald-100 text-emerald-800", icon: UsersRound },
+                { label: "Active Client", value: visibleActiveClients.length, color: "bg-emerald-100 text-emerald-800", icon: UsersRound },
                 { label: "Work Plan", value: plansToday.length, color: "bg-sky-100 text-sky-800", icon: ListChecks },
               ].map(({ label, value, color, icon: Icon }) => (
                 <div key={label} className="rounded-lg border border-white bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950">
@@ -537,11 +566,11 @@ export default function ClientManagementPage() {
       {view === "board" && (
         <section className="flex gap-3 overflow-x-auto pb-4">
           {projectStatuses.map((status) => {
-            const items = projectTasks.filter((task) => task.status === status);
+            const items = visibleProjectTasks.filter((task) => task.status === status);
             return (
               <div key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
                 const taskId = event.dataTransfer.getData("id");
-                const task = projectTasks.find((item) => item.id === taskId);
+                const task = visibleProjectTasks.find((item) => item.id === taskId);
                 if (!task || !canMoveTask(task)) return;
                 moveProjectTask(taskId, status);
               }} className={cn("min-h-[480px] w-[286px] shrink-0 rounded-lg p-3", statusMeta[status].bg)}>
@@ -568,8 +597,8 @@ export default function ClientManagementPage() {
             </div>
             <Badge tone="slate">{timeline.span} hari</Badge>
           </div>
-          {!projectTasks.length ? <EmptyProjectState /> : <div className="space-y-3 overflow-x-auto pb-2">
-            {projectTasks.map((task) => {
+          {!visibleProjectTasks.length ? <EmptyProjectState /> : <div className="space-y-3 overflow-x-auto pb-2">
+            {visibleProjectTasks.map((task) => {
               const offset = dateOffset(timeline.base, task.dueDate);
               const width = 1;
               return (
@@ -600,17 +629,17 @@ export default function ClientManagementPage() {
               <h2 className="font-black">Active Clients</h2>
               <p className="text-xs text-slate-400">Otomatis dari CRM stage Client (Active)</p>
             </div>
-            <Badge tone="teal">{activeClients.length} berjalan</Badge>
+            <Badge tone="teal">{visibleActiveClients.length} berjalan</Badge>
           </div>
-          {!activeClients.length ? <EmptyProjectState /> : (
+          {!visibleActiveClients.length ? <EmptyProjectState /> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1040px] text-left text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
                   <tr>{["Client", "PIC", "Layanan / Project", "Scope Kerja Sama", "Output", "Owner", "Health"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {activeClients.map((client) => {
-                    const projects = getClientProjects(client);
+                  {visibleActiveClients.map((client) => {
+                    const projects = visibleClientProjects(client);
                     return (
                       <tr key={client.id} className="border-t border-slate-100 dark:border-slate-800">
                         <td className="p-4 font-black">{client.brand}</td>
@@ -756,7 +785,7 @@ export default function ClientManagementPage() {
             <select name="watcherId" defaultValue={editingTask?.watcherId || editingTask?.assignedById || defaultAssigner?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
           </label>
           <textarea name="description" defaultValue={editingTask?.description || ""} rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Catatan singkat" />
-          {!activeClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Tambahkan atau pindahkan deal CRM ke Client (Active) agar project dan client bisa dipilih.</p>}
+          {!visibleActiveClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Belum ada client active yang sesuai dengan scope akses akun ini.</p>}
           <Button disabled={!taskProjectOptions.length || !taskClientOptions.length} className="w-full">Simpan Task</Button>
         </form>
       </Modal>
