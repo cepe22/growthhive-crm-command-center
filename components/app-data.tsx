@@ -10,6 +10,7 @@ import {
   type DailyWorkPlan,
   type ProjectStatus,
   type ProjectTask,
+  type TaskNotification,
   type TeamMember,
 } from "@/lib/client-projects";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
@@ -23,6 +24,7 @@ type AppData = {
   invoices: Invoice[];
   expenses: Expense[];
   reimbursements: Reimbursement[];
+  taskNotifications: TaskNotification[];
   addClient: (client: Client) => void;
   updateClient: (id: string, client: Client) => void;
   moveClient: (id: string, stage: Client["stage"]) => void;
@@ -41,11 +43,14 @@ type AppData = {
   addExpense: (expense: Expense) => void;
   addReimbursement: (reimbursement: Reimbursement) => void;
   updateReimbursement: (id: string, reimbursement: Reimbursement) => void;
+  addTaskNotification: (notification: TaskNotification) => void;
+  updateTaskNotification: (id: string, notification: TaskNotification) => void;
 };
 
 const DataContext = createContext<AppData | null>(null);
 const activeClientSeedVersion = "gh-active-clients-2026-07-05-v1";
 const calendarCleanupVersion = "gh-calendar-cleanup-2026-07-07-v1";
+const teamEmailSyncVersion = "gh-team-email-sync-2026-07-07-v1";
 
 function mergeActiveGhClients(existing: Client[]) {
   const seededBrands = new Set(activeGhClients.map((client) => client.brand.toLowerCase()));
@@ -85,6 +90,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [invoices, setInvoices] = useStoredState<Invoice[]>("gh-invoices", []);
   const [expenses, setExpenses] = useStoredState<Expense[]>("gh-expenses", []);
   const [reimbursements, setReimbursements] = useStoredState<Reimbursement[]>("gh-reimbursements-v1", []);
+  const [taskNotifications, setTaskNotifications] = useStoredState<TaskNotification[]>("gh-task-notifications-v1", []);
 
   useEffect(() => {
     if (localStorage.getItem("gh-active-client-seed-version") === activeClientSeedVersion) return;
@@ -108,6 +114,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("gh-calendar-cleanup-version", calendarCleanupVersion);
   }, [setCalendarEvents]);
 
+  useEffect(() => {
+    if (localStorage.getItem("gh-team-email-sync-version") === teamEmailSyncVersion) return;
+    setTeamMembers((members) => members.map((member) => {
+      const source = initialTeamMembers.find((item) => item.id === member.id);
+      return source ? { ...member, email: source.email } : member;
+    }));
+    localStorage.setItem("gh-team-email-sync-version", teamEmailSyncVersion);
+  }, [setTeamMembers]);
+
   return (
     <DataContext.Provider
       value={{
@@ -119,6 +134,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         invoices,
         expenses,
         reimbursements,
+        taskNotifications,
         addClient: (client) => setClients((items) => [...items, client]),
         updateClient: (id, client) => setClients((items) => items.map((item) => (item.id === id ? client : item))),
         moveClient: (id, stage) => setClients((items) => items.map((client) => (client.id === id ? { ...client, stage } : client))),
@@ -137,6 +153,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         addExpense: (expense) => setExpenses((items) => [expense, ...items]),
         addReimbursement: (reimbursement) => setReimbursements((items) => [reimbursement, ...items]),
         updateReimbursement: (id, reimbursement) => setReimbursements((items) => items.map((item) => (item.id === id ? reimbursement : item))),
+        addTaskNotification: (notification) => setTaskNotifications((items) => [notification, ...items]),
+        updateTaskNotification: (id, notification) => setTaskNotifications((items) => items.map((item) => (item.id === id ? notification : item))),
       }}
     >
       {children}

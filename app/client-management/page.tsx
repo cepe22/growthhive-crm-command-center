@@ -14,13 +14,17 @@ import {
   type ProjectPriority,
   type ProjectStatus,
   type ProjectTask,
+  type TaskComment,
+  type TaskNotification,
   type TeamMember,
   type TeamRole,
   type WorkPlanStatus,
 } from "@/lib/client-projects";
+import { getUserAccess } from "@/lib/auth";
 import { getClientProjects } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import {
+  Bell,
   CalendarDays,
   CalendarPlus,
   ChartGantt,
@@ -29,6 +33,9 @@ import {
   Clock3,
   Columns3,
   ListChecks,
+  Lock,
+  Mail,
+  MessageSquareText,
   Pencil,
   Plus,
   Sparkles,
@@ -39,7 +46,7 @@ import {
   X,
   MessageSquarePlus,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 const statusMeta: Record<ProjectStatus, { label: string; accent: string; bg: string }> = {
   Backlog: { label: "Backlog", accent: "bg-slate-400", bg: "bg-slate-50 dark:bg-slate-950" },
@@ -61,6 +68,8 @@ const planTone: Record<WorkPlanStatus, "teal" | "amber" | "red" | "slate"> = {
   Blocked: "red",
   Done: "slate",
 };
+
+const reminderOffsets = new Set([3, 1, 0, -1]);
 
 const avatarEmoji: Record<string, string> = {
   Lion: "🦁",
@@ -86,6 +95,20 @@ function daysBetween(start: string, end: string) {
   const startDate = new Date(`${start}T00:00:00`);
   const endDate = new Date(`${end}T00:00:00`);
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+}
+
+function dayDistance(from: string, to: string) {
+  const fromDate = new Date(`${from}T00:00:00`);
+  const toDate = new Date(`${to}T00:00:00`);
+  return Math.round((toDate.getTime() - fromDate.getTime()) / 86400000);
+}
+
+function reminderLabel(distance: number) {
+  if (distance === 3) return "H-3";
+  if (distance === 1) return "H-1";
+  if (distance === 0) return "Hari H";
+  if (distance === -1) return "H+1";
+  return `${Math.abs(distance)} hari`;
 }
 
 function dateOffset(base: string, value: string) {
@@ -114,6 +137,7 @@ export default function ClientManagementPage() {
     calendarEvents,
     teamMembers,
     clients,
+    taskNotifications,
     saveProjectTasks,
     addProjectTask,
     updateProjectTask,
@@ -123,22 +147,35 @@ export default function ClientManagementPage() {
     saveCalendarEvents,
     addCalendarEvent,
     saveTeamMembers,
+    addTaskNotification,
+    updateTaskNotification,
   } = useAppData();
   const [view, setView] = useState<"board" | "timeline" | "clients" | "workplan" | "calendar">("board");
   const [taskModal, setTaskModal] = useState(false);
   const [progressModal, setProgressModal] = useState(false);
+  const [commentModal, setCommentModal] = useState(false);
   const [planModal, setPlanModal] = useState(false);
   const [eventModal, setEventModal] = useState(false);
   const [memberModal, setMemberModal] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [progressTask, setProgressTask] = useState<ProjectTask | null>(null);
+  const [commentTask, setCommentTask] = useState<ProjectTask | null>(null);
   const [selectedDate, setSelectedDate] = useState(today());
+  const [currentEmail, setCurrentEmail] = useState("");
 
   const memberById = (id: string) => teamMembers.find((member) => member.id === id) || teamMembers[0];
+  const memberByEmail = (email: string) => teamMembers.find((member) => member.email.toLowerCase() === email.toLowerCase());
+  const currentMember = memberByEmail(currentEmail) || (getUserAccess(currentEmail) === "admin" ? teamMembers[0] : undefined);
+  const isAdmin = getUserAccess(currentEmail) === "admin";
+  const canMoveTask = (task: ProjectTask) => Boolean(currentMember && task.assigneeId === currentMember.id);
+  const canEditTask = (task: ProjectTask) => Boolean(currentMember && task.assignedById === currentMember.id);
+  const canProgressTask = (task: ProjectTask) => Boolean(currentMember && task.assigneeId === currentMember.id);
+  const canCommentTask = (task: ProjectTask) => Boolean(currentMember && task.watcherId === currentMember.id);
   const activeClients = clients.filter((client) => client.stage === "Client (Active)");
   const projectOptions = Array.from(new Set(activeClients.flatMap((client) => getClientProjects(client).map((project) => project.name))));
   const clientOptions = activeClients.map((client) => client.brand);
   const assigners = teamMembers.filter((member) => member.id === "tm-christopher" || member.id === "tm-inaya");
+  const defaultAssigner = assigners.find((member) => member.id === currentMember?.id) || assigners[0] || teamMembers[0];
   const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
   const taskClientOptions = Array.from(new Set([...(editingTask?.client ? [editingTask.client] : []), ...clientOptions]));
   const activeTasks = projectTasks.filter((task) => task.status !== "Done");
@@ -148,10 +185,81 @@ export default function ClientManagementPage() {
   }).length;
   const plansToday = dailyWorkPlans.filter((plan) => plan.date === selectedDate);
   const appEventsToday = calendarEvents.filter((event) => event.date === selectedDate);
+  const myNotifications = currentMember ? taskNotifications.filter((notification) => notification.recipientId === currentMember.id) : [];
+  const unreadNotifications = myNotifications.filter((notification) => !notification.read).length;
   const timeline = useMemo(() => {
     const base = projectTasks.length ? projectTasks.map((task) => task.dueDate).sort()[0] : today();
     return { base, span: Math.max(14, ...projectTasks.map((task) => dateOffset(base, task.dueDate) + 1)) };
   }, [projectTasks]);
+
+  useEffect(() => {
+    fetch("/api/session")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setCurrentEmail(data?.email || ""))
+      .catch(() => setCurrentEmail(""));
+  }, []);
+
+  async function sendTaskEmail(notification: TaskNotification) {
+    try {
+      const response = await fetch("/api/task-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: notification.recipientEmail,
+          subject: notification.title,
+          message: notification.message,
+        }),
+      });
+      const result = await response.json();
+      updateTaskNotification(notification.id, { ...notification, emailSent: Boolean(result.sent), emailError: result.error });
+    } catch {
+      updateTaskNotification(notification.id, { ...notification, emailSent: false, emailError: "Email gagal dipanggil dari browser." });
+    }
+  }
+
+  function createTaskNotification(task: ProjectTask, recipient: TeamMember, kind: TaskNotification["kind"], title: string, message: string) {
+    const notification: TaskNotification = {
+      id: crypto.randomUUID(),
+      taskId: task.id,
+      recipientId: recipient.id,
+      recipientEmail: recipient.email,
+      kind,
+      title,
+      message,
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+    addTaskNotification(notification);
+    void sendTaskEmail(notification);
+  }
+
+  function notifyTaskAssignee(task: ProjectTask, recipient: TeamMember, title: string, message: string, logKey: string) {
+    if (task.notificationLog?.includes(logKey)) return;
+    createTaskNotification(task, recipient, logKey.startsWith("reminder") ? "reminder" : "assigned", title, message);
+    updateProjectTask(task.id, { ...task, notificationLog: [...(task.notificationLog || []), logKey] });
+  }
+
+  useEffect(() => {
+    const currentDate = today();
+    projectTasks.forEach((task) => {
+      if (task.status === "Done") return;
+      const distance = dayDistance(currentDate, task.dueDate);
+      if (!reminderOffsets.has(distance)) return;
+      const logKey = `reminder-${currentDate}-${distance}`;
+      if (task.notificationLog?.includes(logKey)) return;
+      const assignee = memberById(task.assigneeId);
+      const progressCopy = task.progressUpdates?.length ? "Task belum selesai. Cek progress terakhir dan update status bila sudah ada perkembangan." : "Task belum selesai dan belum ada progress update tertulis.";
+      notifyTaskAssignee(
+        task,
+        assignee,
+        `[${reminderLabel(distance)}] Reminder task: ${task.title}`,
+        `${progressCopy}\n\nTask: ${task.title}\nProject: ${task.project}\nClient: ${task.client || "-"}\nDeadline: ${formatDate(task.dueDate)}`,
+        logKey,
+      );
+    });
+    // Reminder delivery is guarded by task.notificationLog to avoid duplicate notifications.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTasks, teamMembers]);
 
   function openNewTask() {
     setEditingTask(null);
@@ -160,23 +268,41 @@ export default function ClientManagementPage() {
 
   function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (editingTask && !canEditTask(editingTask)) return;
     const data = new FormData(event.currentTarget);
+    const previousAssigneeId = editingTask?.assigneeId;
+    const nextAssigneeId = String(data.get("assigneeId"));
+    const assignmentLogKey = `assigned-${nextAssigneeId}-${Date.now()}`;
+    const assignee = memberById(nextAssigneeId);
     const task: ProjectTask = {
       id: editingTask?.id || crypto.randomUUID(),
       title: String(data.get("title")),
       project: String(data.get("project")),
       client: String(data.get("client")),
       status: String(data.get("status")) as ProjectStatus,
-      assigneeId: String(data.get("assigneeId")),
+      assigneeId: nextAssigneeId,
       assignedById: String(data.get("assignedById")),
       watcherId: String(data.get("watcherId")),
       dueDate: String(data.get("dueDate")),
       priority: String(data.get("priority")) as ProjectPriority,
       description: String(data.get("description")),
       progressUpdates: editingTask?.progressUpdates || [],
+      comments: editingTask?.comments || [],
+      notificationLog: editingTask?.notificationLog || [],
     };
-    if (editingTask) updateProjectTask(editingTask.id, task);
-    else addProjectTask(task);
+    const shouldNotifyAssignee = !editingTask || previousAssigneeId !== task.assigneeId;
+    const taskToSave = shouldNotifyAssignee ? { ...task, notificationLog: [...(task.notificationLog || []), assignmentLogKey] } : task;
+    if (editingTask) updateProjectTask(editingTask.id, taskToSave);
+    else addProjectTask(taskToSave);
+    if (shouldNotifyAssignee) {
+      createTaskNotification(
+        taskToSave,
+        assignee,
+        "assigned",
+        `Task baru: ${task.title}`,
+        `Kamu di-assign untuk task "${task.title}".\n\nProject: ${task.project}\nClient: ${task.client || "-"}\nDeadline: ${formatDate(task.dueDate)}\nAssigned by: ${memberById(task.assignedById).name}`,
+      );
+    }
     setTaskModal(false);
     setEditingTask(null);
   }
@@ -238,13 +364,21 @@ export default function ClientManagementPage() {
   }
 
   function removeTask(task: ProjectTask) {
+    if (!canEditTask(task)) return;
     if (!window.confirm(`Hapus task "${task.title}"?`)) return;
     saveProjectTasks(projectTasks.filter((item) => item.id !== task.id));
   }
 
   function openProgress(task: ProjectTask) {
+    if (!canProgressTask(task)) return;
     setProgressTask(task);
     setProgressModal(true);
+  }
+
+  function openComment(task: ProjectTask) {
+    if (!canCommentTask(task)) return;
+    setCommentTask(task);
+    setCommentModal(true);
   }
 
   function submitProgress(event: FormEvent<HTMLFormElement>) {
@@ -257,7 +391,7 @@ export default function ClientManagementPage() {
         ...(progressTask.progressUpdates || []),
         {
           id: crypto.randomUUID(),
-          authorId: String(data.get("authorId")),
+          authorId: progressTask.assigneeId,
           date: today(),
           note: String(data.get("note")),
         },
@@ -266,6 +400,25 @@ export default function ClientManagementPage() {
     updateProjectTask(progressTask.id, updatedTask);
     setProgressTask(null);
     setProgressModal(false);
+  }
+
+  function submitComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!commentTask || !canCommentTask(commentTask)) return;
+    const data = new FormData(event.currentTarget);
+    const comment: TaskComment = {
+      id: crypto.randomUUID(),
+      authorId: commentTask.watcherId,
+      date: today(),
+      note: String(data.get("note")),
+    };
+    updateProjectTask(commentTask.id, { ...commentTask, comments: [...(commentTask.comments || []), comment] });
+    setCommentTask(null);
+    setCommentModal(false);
+  }
+
+  function markNotificationRead(notification: TaskNotification) {
+    updateTaskNotification(notification.id, { ...notification, read: true });
   }
 
   function removePlan(plan: DailyWorkPlan) {
@@ -279,6 +432,37 @@ export default function ClientManagementPage() {
   return (
     <>
       <Header title="GH Project Hub" subtitle="Board, timeline, work plan, dan meeting kerja tim GrowthHive." />
+
+      <Card className="mb-5 overflow-hidden rounded-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-[11px] font-black uppercase tracking-[.16em] text-teal-700">
+              <Bell size={13} /> Task Notifications
+            </div>
+            <h2 className="font-black">Notifikasi Task</h2>
+            <p className="text-xs text-slate-400">Assignment dan reminder H-3, H-1, Hari H, H+1 muncul untuk assignee.</p>
+          </div>
+          <Badge tone={unreadNotifications ? "amber" : "slate"}>{unreadNotifications} unread</Badge>
+        </div>
+        {!currentMember ? (
+          <div className="border-t border-slate-100 p-5 text-sm font-bold text-slate-400 dark:border-slate-800">Akun ini belum cocok dengan anggota Project Hub.</div>
+        ) : !myNotifications.length ? (
+          <div className="border-t border-slate-100 p-5 text-sm font-bold text-slate-400 dark:border-slate-800">Belum ada notifikasi untuk kamu.</div>
+        ) : (
+          <div className="grid border-t border-slate-100 dark:border-slate-800 md:grid-cols-2 xl:grid-cols-3">
+            {myNotifications.slice(0, 6).map((notification) => (
+              <button key={notification.id} onClick={() => markNotificationRead(notification)} className={cn("border-b border-r border-slate-100 p-4 text-left transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60", !notification.read && "bg-teal-50/50 dark:bg-teal-950/20")}>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <Badge tone={notification.kind === "assigned" ? "teal" : "amber"}>{notification.kind === "assigned" ? "Assigned" : "Reminder"}</Badge>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400"><Mail size={11} />{notification.emailSent ? "email sent" : "email pending"}</span>
+                </div>
+                <p className="line-clamp-1 text-sm font-black">{notification.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{notification.message}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <section className="mb-5 grid gap-4 xl:grid-cols-[1.4fr_.9fr]">
         <div className="overflow-hidden rounded-lg border border-white bg-[#fbfbf7] shadow-soft dark:border-slate-800 dark:bg-slate-900">
@@ -314,9 +498,9 @@ export default function ClientManagementPage() {
               <p className="text-xs font-black uppercase tracking-[.16em] text-slate-400">Zoo Team</p>
               <h2 className="mt-1 font-black">Avatar Tim</h2>
             </div>
-            <button onClick={() => setMemberModal(true)} title="Tambah user" className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+            {isAdmin && <button onClick={() => setMemberModal(true)} title="Tambah user" className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
               <UserRoundPlus size={17} />
-            </button>
+            </button>}
           </div>
           <div className="flex flex-wrap gap-2">
             {teamMembers.map((member) => (
@@ -355,14 +539,19 @@ export default function ClientManagementPage() {
           {projectStatuses.map((status) => {
             const items = projectTasks.filter((task) => task.status === status);
             return (
-              <div key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveProjectTask(event.dataTransfer.getData("id"), status)} className={cn("min-h-[480px] w-[286px] shrink-0 rounded-lg p-3", statusMeta[status].bg)}>
+              <div key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+                const taskId = event.dataTransfer.getData("id");
+                const task = projectTasks.find((item) => item.id === taskId);
+                if (!task || !canMoveTask(task)) return;
+                moveProjectTask(taskId, status);
+              }} className={cn("min-h-[480px] w-[286px] shrink-0 rounded-lg p-3", statusMeta[status].bg)}>
                 <div className="mb-3 flex items-center gap-2">
                   <span className={cn("h-2.5 w-2.5 rounded-full", statusMeta[status].accent)} />
                   <h3 className="text-sm font-black">{statusMeta[status].label}</h3>
                   <span className="ml-auto rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-900">{items.length}</span>
                 </div>
                 <div className="space-y-3">
-                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} onEdit={() => { setEditingTask(task); setTaskModal(true); }} onProgress={() => openProgress(task)} onRemove={() => removeTask(task)} />)}
+                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} canMove={canMoveTask(task)} canEdit={canEditTask(task)} canProgress={canProgressTask(task)} canComment={canCommentTask(task)} onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setTaskModal(true); }} onProgress={() => openProgress(task)} onComment={() => openComment(task)} onRemove={() => removeTask(task)} />)}
                 </div>
               </div>
             );
@@ -554,7 +743,7 @@ export default function ClientManagementPage() {
             </label>
             <label>
               <span className="mb-2 block text-xs font-bold">Assigned by</span>
-              <select name="assignedById" defaultValue={editingTask?.assignedById || assigners[0]?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+              <select name="assignedById" defaultValue={editingTask?.assignedById || defaultAssigner?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
             </label>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -564,7 +753,7 @@ export default function ClientManagementPage() {
           </div>
           <label>
             <span className="mb-2 block text-xs font-bold">Pengawas progress</span>
-            <select name="watcherId" defaultValue={editingTask?.watcherId || editingTask?.assignedById || assigners[0]?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+            <select name="watcherId" defaultValue={editingTask?.watcherId || editingTask?.assignedById || defaultAssigner?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
           </label>
           <textarea name="description" defaultValue={editingTask?.description || ""} rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Catatan singkat" />
           {!activeClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Tambahkan atau pindahkan deal CRM ke Client (Active) agar project dan client bisa dipilih.</p>}
@@ -574,10 +763,7 @@ export default function ClientManagementPage() {
 
       <Modal open={progressModal} title={`Progress · ${progressTask?.title || ""}`} onClose={() => { setProgressModal(false); setProgressTask(null); }}>
         {progressTask && <form onSubmit={submitProgress} className="space-y-4">
-          <label>
-            <span className="mb-2 block text-xs font-bold">Ditambahkan oleh</span>
-            <select name="authorId" className={fieldClass}>{Array.from(new Set([progressTask.assignedById, progressTask.watcherId])).map((id) => <option key={id} value={id}>{memberById(id).name}</option>)}</select>
-          </label>
+          <div className="rounded-lg bg-teal-50 p-3 text-xs font-bold text-teal-800">Progress update ditulis oleh assignee: {memberById(progressTask.assigneeId).name}</div>
           <textarea name="note" required rows={5} className={`${fieldClass} h-auto py-3`} placeholder="Tulis notes atau progress update terbaru" />
           <div className="space-y-3">
             {(progressTask.progressUpdates || []).slice().reverse().map((update) => (
@@ -591,6 +777,25 @@ export default function ClientManagementPage() {
             ))}
           </div>
           <Button className="w-full">Simpan Progress</Button>
+        </form>}
+      </Modal>
+
+      <Modal open={commentModal} title={`Komentar PIC · ${commentTask?.title || ""}`} onClose={() => { setCommentModal(false); setCommentTask(null); }}>
+        {commentTask && <form onSubmit={submitComment} className="space-y-4">
+          <div className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-800">Komentar tambahan hanya bisa ditulis oleh pengawas/PIC: {memberById(commentTask.watcherId).name}</div>
+          <textarea name="note" required rows={5} className={`${fieldClass} h-auto py-3`} placeholder="Tulis komentar, arahan, atau feedback tambahan" />
+          <div className="space-y-3">
+            {(commentTask.comments || []).slice().reverse().map((comment) => (
+              <div key={comment.id} className="rounded-lg border border-slate-100 p-3 text-sm dark:border-slate-800">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="font-black">{memberById(comment.authorId).name}</span>
+                  <span className="text-xs text-slate-400">{formatDate(comment.date)}</span>
+                </div>
+                <p className="whitespace-pre-line text-slate-500 dark:text-slate-300">{comment.note}</p>
+              </div>
+            ))}
+          </div>
+          <Button className="w-full">Simpan Komentar PIC</Button>
         </form>}
       </Modal>
 
@@ -645,19 +850,47 @@ function Avatar({ member }: { member: TeamMember }) {
   return <div className="flex min-w-0 items-center gap-2"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg", member.color)}>{avatarEmoji[member.avatar]}</span><div className="min-w-0"><p className="truncate text-sm font-black">{member.name}</p><p className="truncate text-[11px] text-slate-400">{member.role}</p></div></div>;
 }
 
-function TaskCard({ task, member, assigner, watcher, onEdit, onProgress, onRemove }: { task: ProjectTask; member: TeamMember; assigner: TeamMember; watcher: TeamMember; onEdit: () => void; onProgress: () => void; onRemove: () => void }) {
+function TaskCard({
+  task,
+  member,
+  assigner,
+  watcher,
+  canMove,
+  canEdit,
+  canProgress,
+  canComment,
+  onEdit,
+  onProgress,
+  onComment,
+  onRemove,
+}: {
+  task: ProjectTask;
+  member: TeamMember;
+  assigner: TeamMember;
+  watcher: TeamMember;
+  canMove: boolean;
+  canEdit: boolean;
+  canProgress: boolean;
+  canComment: boolean;
+  onEdit: () => void;
+  onProgress: () => void;
+  onComment: () => void;
+  onRemove: () => void;
+}) {
   const latestUpdate = task.progressUpdates?.slice().reverse()[0];
+  const latestComment = task.comments?.slice().reverse()[0];
   return (
-    <article draggable onDragStart={(event) => event.dataTransfer.setData("id", task.id)} className="animate-[fadeUp_.28s_ease-out] rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900">
+    <article draggable={canMove} onDragStart={(event) => { if (!canMove) return; event.dataTransfer.setData("id", task.id); }} className={cn("animate-[fadeUp_.28s_ease-out] rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900", canMove ? "cursor-grab" : "cursor-default")}>
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h4 className="truncate text-sm font-black">{task.title}</h4>
           <p className="mt-1 truncate text-xs text-slate-400">{task.project} · {task.client || "Internal"}</p>
         </div>
         <div className="flex gap-1">
-          <button onClick={onEdit} title="Edit task" className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button>
-          <button onClick={onProgress} title="Tambah progress" className="grid h-8 w-8 place-items-center rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-sky-900 dark:hover:bg-sky-950"><MessageSquarePlus size={14} /></button>
-          <button onClick={onRemove} title="Hapus task" className="grid h-8 w-8 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50"><Trash2 size={14} /></button>
+          <button onClick={onEdit} disabled={!canEdit} title={canEdit ? "Edit task" : "Hanya pemberi assign yang bisa edit"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" : "border-slate-100 text-slate-300")}><Pencil size={14} /></button>
+          <button onClick={onProgress} disabled={!canProgress} title={canProgress ? "Tambah progress" : "Hanya assignee yang bisa update progress"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canProgress ? "border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-sky-900 dark:hover:bg-sky-950" : "border-slate-100 text-slate-300")}><MessageSquarePlus size={14} /></button>
+          <button onClick={onComment} disabled={!canComment} title={canComment ? "Komentar PIC" : "Hanya pengawas/PIC yang bisa komentar"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canComment ? "border-amber-200 text-amber-600 hover:bg-amber-50" : "border-slate-100 text-slate-300")}><MessageSquareText size={14} /></button>
+          <button onClick={onRemove} disabled={!canEdit} title={canEdit ? "Hapus task" : "Hanya pemberi assign yang bisa hapus"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-rose-200 text-rose-500 hover:bg-rose-50" : "border-slate-100 text-slate-300")}><Trash2 size={14} /></button>
         </div>
       </div>
       <Avatar member={member} />
@@ -665,8 +898,10 @@ function TaskCard({ task, member, assigner, watcher, onEdit, onProgress, onRemov
         <span>Assigned by {assigner.name}</span>
         <span>Pengawas {watcher.name}</span>
       </div>
+      {!canMove && <div className="mt-3 inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-800"><Lock size={11} /> Board move dikunci untuk assignee</div>}
       <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-300">{task.description || "Belum ada catatan."}</p>
-      {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{assigner.id === latestUpdate.authorId ? assigner.name : watcher.name}: </span>{latestUpdate.note}</div>}
+      {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{member.name}: </span>{latestUpdate.note}</div>}
+      {latestComment && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800"><span className="font-black">{watcher.name}: </span>{latestComment.note}</div>}
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
         <Badge tone={priorityTone[task.priority]}>{task.priority}</Badge>
         <span className="text-xs font-black text-slate-500">{formatDate(task.dueDate)}</span>

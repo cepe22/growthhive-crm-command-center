@@ -32,6 +32,8 @@ export type ProjectTask = {
   priority: ProjectPriority;
   description?: string;
   progressUpdates?: TaskProgressUpdate[];
+  comments?: TaskComment[];
+  notificationLog?: string[];
 };
 
 export type TaskProgressUpdate = {
@@ -39,6 +41,29 @@ export type TaskProgressUpdate = {
   authorId: string;
   date: string;
   note: string;
+};
+
+export type TaskComment = {
+  id: string;
+  authorId: string;
+  date: string;
+  note: string;
+};
+
+export type TaskNotificationKind = "assigned" | "reminder";
+
+export type TaskNotification = {
+  id: string;
+  taskId: string;
+  recipientId: string;
+  recipientEmail: string;
+  kind: TaskNotificationKind;
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  emailSent?: boolean;
+  emailError?: string;
 };
 
 export type WorkPlanStatus = "Focus" | "Review" | "Blocked" | "Done";
@@ -83,7 +108,7 @@ export const teamMembers: TeamMember[] = [
   {
     id: "tm-christopher",
     name: "Christopher",
-    email: "christopher@growthhive.id",
+    email: "growthiveofficial@gmail.com",
     role: "CEO",
     avatar: "Lion",
     color: "bg-amber-100 text-amber-800",
@@ -91,7 +116,7 @@ export const teamMembers: TeamMember[] = [
   {
     id: "tm-joshua",
     name: "Joshua",
-    email: "joshua@growthhive.id",
+    email: "joshua.ramadhan@gmail.com",
     role: "Marketplace & Ads Performance",
     avatar: "Panda",
     color: "bg-sky-100 text-sky-800",
@@ -99,7 +124,7 @@ export const teamMembers: TeamMember[] = [
   {
     id: "tm-inaya",
     name: "Inaya",
-    email: "inaya@growthhive.id",
+    email: "bariahinayatul@gmail.com",
     role: "Creative Project Manager",
     avatar: "Koala",
     color: "bg-rose-100 text-rose-800",
@@ -107,7 +132,7 @@ export const teamMembers: TeamMember[] = [
   {
     id: "tm-sellina",
     name: "Sellina",
-    email: "sellina@growthhive.id",
+    email: "sellinaukrida2020@gmail.com",
     role: "Social Media Specialist",
     avatar: "Tiger",
     color: "bg-violet-100 text-violet-800",
