@@ -3,9 +3,10 @@ export const allowedTeamEmails = [
   "bariahinayatul@gmail.com",
   "sellinaukrida2020@gmail.com",
   "growthiveofficial@gmail.com",
+  "hi.growthive@gmail.com",
 ] as const;
 
-export const adminEmails = ["growthiveofficial@gmail.com"] as const;
+export const adminEmails = ["growthiveofficial@gmail.com", "hi.growthive@gmail.com"] as const;
 
 export type UserAccess = "admin" | "team";
 
