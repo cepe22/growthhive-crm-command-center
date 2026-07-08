@@ -11,13 +11,15 @@ export type UserAccess = "admin" | "team";
 
 const sessionCookieName = "gh-session";
 const userEmailCookieName = "gh-user-email";
+const passwordOverrideCookieName = "gh-password-overrides";
 const maxAgeSeconds = 60 * 60 * 24 * 7;
+const passwordMaxAgeSeconds = 60 * 60 * 24 * 365;
 
 function sessionSecret() {
   return process.env.AUTH_SESSION_SECRET || "growthhive-temporary-session";
 }
 
-function normalizeEmail(email: string) {
+export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
@@ -69,8 +71,43 @@ export async function verifySessionToken(token?: string | null) {
   }
 }
 
+export function defaultLoginPassword() {
+  return process.env.TEMP_LOGIN_PASSWORD || "GrowthHive2026!";
+}
+
+export async function passwordHash(email: string, password: string) {
+  return hmac(`${normalizeEmail(email)}:${password}`);
+}
+
+export async function readPasswordOverrides(token?: string | null) {
+  if (!token) return {} as Record<string, string>;
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature || signature !== await hmac(payload)) return {};
+  try {
+    const data = JSON.parse(base64UrlDecode(payload)) as Record<string, string>;
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function createPasswordOverridesToken(overrides: Record<string, string>) {
+  const payload = base64UrlEncode(JSON.stringify(overrides));
+  return `${payload}.${await hmac(payload)}`;
+}
+
+export async function verifyLoginPassword(email: string, password: string, overrideToken?: string | null) {
+  const normalizedEmail = normalizeEmail(email);
+  const overrides = await readPasswordOverrides(overrideToken);
+  const override = overrides[normalizedEmail];
+  if (override) return override === await passwordHash(normalizedEmail, password);
+  return password === defaultLoginPassword();
+}
+
 export const authCookies = {
   session: sessionCookieName,
   email: userEmailCookieName,
+  passwords: passwordOverrideCookieName,
   maxAge: maxAgeSeconds,
+  passwordMaxAge: passwordMaxAgeSeconds,
 };

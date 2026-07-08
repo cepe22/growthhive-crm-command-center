@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { authCookies, getUserAccess, verifySessionToken } from "@/lib/auth";
 
-const teamAllowedPaths = ["/", "/client-management", "/reimbursements"];
+const teamAllowedPaths = ["/", "/client-management", "/reimbursements", "/account"];
 const teamBlockedPaths = ["/crm", "/clients", "/invoices", "/finance", "/reports", "/settings"];
 
 function pathStartsWith(pathname: string, paths: string[]) {
