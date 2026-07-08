@@ -6,9 +6,10 @@ export const allowedTeamEmails = [
   "hi.growthive@gmail.com",
 ] as const;
 
-export const adminEmails = ["growthiveofficial@gmail.com", "hi.growthive@gmail.com"] as const;
+export const adminEmails = ["growthiveofficial@gmail.com"] as const;
+export const readOnlyEmails = ["hi.growthive@gmail.com"] as const;
 
-export type UserAccess = "admin" | "team";
+export type UserAccess = "admin" | "team" | "readonly";
 
 const sessionCookieName = "gh-session";
 const userEmailCookieName = "gh-user-email";
@@ -49,8 +50,14 @@ export function isAdminEmail(email?: string | null) {
   return adminEmails.includes(normalizeEmail(email) as (typeof adminEmails)[number]);
 }
 
+export function isReadOnlyEmail(email?: string | null) {
+  if (!email) return false;
+  return readOnlyEmails.includes(normalizeEmail(email) as (typeof readOnlyEmails)[number]);
+}
+
 export function getUserAccess(email?: string | null): UserAccess | null {
   if (!isAllowedEmail(email)) return null;
+  if (isReadOnlyEmail(email)) return "readonly";
   return isAdminEmail(email) ? "admin" : "team";
 }
 

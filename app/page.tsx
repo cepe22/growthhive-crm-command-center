@@ -47,12 +47,13 @@ export default function Dashboard() {
     fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
   }, []);
   const access = getUserAccess(email);
+  const canReadAll = access === "admin" || access === "readonly";
   const currentMember = teamMembers.find((member) => member.email.toLowerCase() === email.toLowerCase()) || (access === "admin" ? teamMembers[0] : undefined);
-  const allowedProjectKeywords = access === "admin" ? [] : memberProjectKeywords(currentMember);
-  const canSeeProjectName = (projectName: string) => access === "admin" || textMatchesKeywords(projectName, allowedProjectKeywords);
-  const visibleActiveClients = clients.filter((client) => client.stage === "Client (Active)" && (access === "admin" || getClientProjects(client).some((project) => canSeeProjectName(`${project.name} ${project.scope || ""}`))));
+  const allowedProjectKeywords = canReadAll ? [] : memberProjectKeywords(currentMember);
+  const canSeeProjectName = (projectName: string) => canReadAll || textMatchesKeywords(projectName, allowedProjectKeywords);
+  const visibleActiveClients = clients.filter((client) => client.stage === "Client (Active)" && (canReadAll || getClientProjects(client).some((project) => canSeeProjectName(`${project.name} ${project.scope || ""}`))));
   const visibleProjectTasks = projectTasks.filter((task) => {
-    if (access === "admin") return true;
+    if (canReadAll) return true;
     if (!currentMember) return false;
     if ([task.assigneeId, task.assignedById, task.watcherId].includes(currentMember.id)) return true;
     return canSeeProjectName(task.project);

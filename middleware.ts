@@ -16,6 +16,7 @@ export async function middleware(request: NextRequest) {
   if (isAuthCallback) return NextResponse.next();
   if (!email && !isLogin) return NextResponse.redirect(new URL("/login", request.url));
   if (email && isLogin) return NextResponse.redirect(new URL("/", request.url));
+  if (access === "readonly" && pathStartsWith(request.nextUrl.pathname, ["/settings"])) return NextResponse.redirect(new URL("/", request.url));
   if (access === "team" && pathStartsWith(request.nextUrl.pathname, teamBlockedPaths)) return NextResponse.redirect(new URL("/", request.url));
   if (access === "team" && !pathStartsWith(request.nextUrl.pathname, teamAllowedPaths)) return NextResponse.redirect(new URL("/", request.url));
   return NextResponse.next();

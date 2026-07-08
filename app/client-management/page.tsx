@@ -166,22 +166,25 @@ export default function ClientManagementPage() {
   const memberById = (id: string) => teamMembers.find((member) => member.id === id) || teamMembers[0];
   const memberByEmail = (email: string) => teamMembers.find((member) => member.email.toLowerCase() === email.toLowerCase());
   const currentMember = memberByEmail(currentEmail) || (getUserAccess(currentEmail) === "admin" ? teamMembers[0] : undefined);
-  const isAdmin = getUserAccess(currentEmail) === "admin";
-  const canMoveTask = (task: ProjectTask) => Boolean(currentMember && task.assigneeId === currentMember.id);
-  const canEditTask = (task: ProjectTask) => Boolean(currentMember && task.assignedById === currentMember.id);
-  const canProgressTask = (task: ProjectTask) => Boolean(currentMember && task.assigneeId === currentMember.id);
-  const canCommentTask = (task: ProjectTask) => Boolean(currentMember && task.watcherId === currentMember.id);
+  const access = getUserAccess(currentEmail);
+  const isAdmin = access === "admin";
+  const isReadOnly = access === "readonly";
+  const canReadAll = isAdmin || isReadOnly;
+  const canMoveTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
+  const canEditTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assignedById === currentMember.id);
+  const canProgressTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
+  const canCommentTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.watcherId === currentMember.id);
   const activeClients = clients.filter((client) => client.stage === "Client (Active)");
-  const allowedProjectKeywords = isAdmin ? [] : memberProjectKeywords(currentMember);
-  const canSeeProjectName = (projectName: string) => isAdmin || textMatchesKeywords(projectName, allowedProjectKeywords);
+  const allowedProjectKeywords = canReadAll ? [] : memberProjectKeywords(currentMember);
+  const canSeeProjectName = (projectName: string) => canReadAll || textMatchesKeywords(projectName, allowedProjectKeywords);
   const visibleClientProjects = (client: (typeof activeClients)[number]) => {
     const projects = getClientProjects(client);
-    if (isAdmin) return projects;
+    if (canReadAll) return projects;
     return projects.filter((project) => canSeeProjectName(`${project.name} ${project.scope || ""}`));
   };
   const visibleActiveClients = activeClients.filter((client) => visibleClientProjects(client).length > 0);
   const canSeeTask = (task: ProjectTask) => {
-    if (isAdmin) return true;
+    if (canReadAll) return true;
     if (!currentMember) return false;
     if ([task.assigneeId, task.assignedById, task.watcherId].includes(currentMember.id)) return true;
     return canSeeProjectName(task.project);
@@ -276,12 +279,14 @@ export default function ClientManagementPage() {
   }, [projectTasks, teamMembers]);
 
   function openNewTask() {
+    if (isReadOnly) return;
     setEditingTask(null);
     setTaskModal(true);
   }
 
   function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isReadOnly) return;
     if (editingTask && !canEditTask(editingTask)) return;
     const data = new FormData(event.currentTarget);
     const previousAssigneeId = editingTask?.assigneeId;
@@ -323,6 +328,7 @@ export default function ClientManagementPage() {
 
   function submitEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isReadOnly) return;
     const data = new FormData(event.currentTarget);
     const attendeeIds = data.getAll("attendeeIds").map(String);
     const ownerId = String(data.get("ownerId"));
@@ -346,6 +352,7 @@ export default function ClientManagementPage() {
 
   function submitMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isAdmin) return;
     const data = new FormData(event.currentTarget);
     const palette = ["bg-amber-100 text-amber-800", "bg-rose-100 text-rose-800", "bg-sky-100 text-sky-800", "bg-violet-100 text-violet-800", "bg-emerald-100 text-emerald-800"];
     saveTeamMembers([
@@ -520,10 +527,10 @@ export default function ClientManagementPage() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2">
+        {!isReadOnly && <div className="flex flex-wrap gap-2">
           <Button onClick={openNewTask}><Plus size={16} />Task</Button>
           <Button variant="outline" onClick={() => setEventModal(true)}><CalendarPlus size={16} />Event</Button>
-        </div>
+        </div>}
       </section>
 
       {view === "board" && (

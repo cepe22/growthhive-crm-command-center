@@ -4,6 +4,7 @@ import { Header } from "@/components/header";
 import { fieldClass, Modal } from "@/components/modal";
 import { useAppData } from "@/components/app-data";
 import { Badge, Button, Card } from "@/components/ui";
+import { getUserAccess } from "@/lib/auth";
 import { getClientProjects, getClientValue, stages, totalProjectValue, type Client, type ClientProject } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { rupiah } from "@/lib/utils";
@@ -27,7 +28,7 @@ import {
   TrendingUp,
   UsersRound,
 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 const stageMeta: Record<Client["stage"], { tone: string; accent: string; label: string }> = {
   Leads: { tone: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200", accent: "bg-slate-400", label: "Capture" },
@@ -78,11 +79,16 @@ function projectFormRows(editing: Client | null) {
 
 export default function CRMPage() {
   const { clients, addClient, updateClient, moveClient } = useAppData();
+  const [email, setEmail] = useState("");
   const [view, setView] = useState<"pipeline" | "list">("pipeline");
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
+  useEffect(() => {
+    fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
+  }, []);
+  const canWrite = getUserAccess(email) !== "readonly";
   const filtered = clients.filter((client) => {
     const haystack = `${client.brand} ${client.pic} ${projectNames(client)} ${projectScopes(client)} ${client.cooperationScope || ""} ${client.industry}`.toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!industry || client.industry === industry);
@@ -98,6 +104,7 @@ export default function CRMPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canWrite) return;
     const data = new FormData(event.currentTarget);
     const projectNames = data.getAll("projectName").map(String);
     const projectScopes = data.getAll("projectScope").map(String);
@@ -151,11 +158,13 @@ export default function CRMPage() {
   }
 
   function openCreateModal() {
+    if (!canWrite) return;
     setEditing(null);
     setOpen(true);
   }
 
   function openEditModal(client: Client) {
+    if (!canWrite) return;
     setEditing(client);
     setOpen(true);
   }
@@ -173,9 +182,9 @@ export default function CRMPage() {
               </div>
               <h2 className="text-xl font-black tracking-tight text-ink dark:text-white">Journey revenue GH</h2>
             </div>
-            <Button onClick={openCreateModal}>
+            {canWrite && <Button onClick={openCreateModal}>
               <Plus size={16} /> Tambah Deal
-            </Button>
+            </Button>}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 min-[1540px]:grid-cols-4">
@@ -253,7 +262,7 @@ export default function CRMPage() {
               const items = filtered.filter((client) => client.stage === stage);
               const stageValue = items.reduce((sum, client) => sum + getClientValue(client), 0);
               return (
-                <div key={stage} onDragOver={(event) => event.preventDefault()} onDrop={(event) => moveClient(event.dataTransfer.getData("id"), stage)} className="min-h-64 w-[238px] shrink-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-950">
+                <div key={stage} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { if (!canWrite) return; moveClient(event.dataTransfer.getData("id"), stage); }} className="min-h-64 w-[238px] shrink-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-950">
                   <div className="mb-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black", stageMeta[stage].tone)}>{stageMeta[stage].label}</span>
@@ -270,7 +279,7 @@ export default function CRMPage() {
                     {items.map((client) => {
                       const projects = getClientProjects(client);
                       return (
-                        <article key={client.id} draggable={clients.some((item) => item.id === client.id)} onDragStart={(event) => event.dataTransfer.setData("id", client.id)} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900">
+                        <article key={client.id} draggable={canWrite && clients.some((item) => item.id === client.id)} onDragStart={(event) => { if (!canWrite) return; event.dataTransfer.setData("id", client.id); }} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900">
                           <div className="mb-3 flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <h4 className="truncate text-sm font-black">{client.brand}</h4>
@@ -278,7 +287,7 @@ export default function CRMPage() {
                             </div>
                             <div className="flex items-center gap-1">
                               <Badge tone={priorityTone[client.priority ?? "Medium"]}>{client.priority ?? "Medium"}</Badge>
-                              <button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={13} /></button>
+                              {canWrite && <button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-7 w-7 place-items-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={13} /></button>}
                             </div>
                           </div>
                           <p className="line-clamp-2 min-h-8 text-xs text-slate-500 dark:text-slate-300">{projects.map((project) => project.name).join(", ") || "Project belum diisi"}</p>
@@ -300,7 +309,7 @@ export default function CRMPage() {
             <table className="w-full min-w-[1180px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
                 <tr>
-                  {["Brand", "Journey", "PIC", "Scope", "Project Value", "Forecast", "Next Action", "Owner", "Health", "Admin"].map((item) => (
+                  {["Brand", "Journey", "PIC", "Scope", "Project Value", "Forecast", "Next Action", "Owner", "Health", ...(canWrite ? ["Admin"] : [])].map((item) => (
                     <th key={item} className="px-4 py-3 font-black">{item}</th>
                   ))}
                 </tr>
@@ -323,7 +332,7 @@ export default function CRMPage() {
                     </td>
                     <td className="px-4 py-4"><span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-xs font-black text-white">{client.owner || "GH"}</span></td>
                     <td className="px-4 py-4"><HealthBadge health={client.health} /></td>
-                    <td className="px-4 py-4"><button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button></td>
+                    {canWrite && <td className="px-4 py-4"><button onClick={() => openEditModal(client)} title="Edit deal" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button></td>}
                   </tr>
                 ))}
               </tbody>

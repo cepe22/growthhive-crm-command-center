@@ -5,18 +5,20 @@ import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { fieldClass, Modal } from "@/components/modal";
 import { Badge, Button, Card } from "@/components/ui";
+import { getUserAccess } from "@/lib/auth";
 import type { Invoice } from "@/lib/data";
 import { generateInvoiceNumber } from "@/lib/invoice-number";
 import { rupiah } from "@/lib/utils";
 import { CircleDollarSign, Clock3, FileText, Filter, Pencil, Plus, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 const InvoiceDownloadButton = dynamic(() => import("@/components/invoice-download-button"), { ssr: false });
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function InvoicesPage() {
   const { invoices, addInvoice, updateInvoice, deleteInvoice } = useAppData();
+  const [email, setEmail] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [status, setStatus] = useState("");
@@ -25,14 +27,20 @@ export default function InvoicesPage() {
   const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
   const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const nextNumber = editing?.no || generateInvoiceNumber(invoices, invoiceDate);
+  useEffect(() => {
+    fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
+  }, []);
+  const canWrite = getUserAccess(email) !== "readonly";
 
   function openCreateModal() {
+    if (!canWrite) return;
     setEditing(null);
     setInvoiceDate(today());
     setOpen(true);
   }
 
   function openEditModal(invoice: Invoice) {
+    if (!canWrite) return;
     setEditing(invoice);
     setInvoiceDate(invoice.date);
     setOpen(true);
@@ -40,6 +48,7 @@ export default function InvoicesPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canWrite) return;
     const data = new FormData(event.currentTarget);
     const invoice: Invoice = {
       id: editing?.id || crypto.randomUUID(),
@@ -60,6 +69,7 @@ export default function InvoicesPage() {
   }
 
   function removeInvoice(invoice: Invoice) {
+    if (!canWrite) return;
     if (!window.confirm(`Hapus invoice ${invoice.no}?`)) return;
     deleteInvoice(invoice.id);
   }
@@ -75,7 +85,7 @@ export default function InvoicesPage() {
             {["Draft", "Terkirim", "Lunas", "Jatuh Tempo"].map((item) => <option key={item}>{item}</option>)}
           </select>
         </div>
-        <Button onClick={openCreateModal}><Plus size={16} />Buat Invoice</Button>
+        {canWrite && <Button onClick={openCreateModal}><Plus size={16} />Buat Invoice</Button>}
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -92,8 +102,8 @@ export default function InvoicesPage() {
         {!shown.length ? <EmptyState title="Belum ada invoice" description="Buat invoice pertama untuk mulai melacak tagihan dan menghasilkan PDF." /> : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-400 dark:bg-slate-800"><tr>{["Nomor", "Klien", "Dibuat", "Jatuh Tempo", "Jumlah", "Status", "Dokumen", "Admin"].map((item) => <th className="p-4" key={item}>{item}</th>)}</tr></thead>
-              <tbody>{shown.map((invoice) => <tr className="border-t border-slate-100 dark:border-slate-800" key={invoice.id}><td className="p-4 font-bold text-teal-700">{invoice.no}</td><td className="p-4 font-semibold">{invoice.client}</td><td className="p-4">{invoice.date}</td><td className="p-4">{invoice.due}</td><td className="p-4 font-bold">{rupiah(invoice.amount)}</td><td className="p-4"><Badge tone={invoice.status === "Lunas" ? "teal" : invoice.status === "Jatuh Tempo" ? "red" : "amber"}>{invoice.status}</Badge></td><td className="p-4"><InvoiceDownloadButton invoice={invoice} /></td><td className="p-4"><div className="flex gap-1"><button onClick={() => openEditModal(invoice)} title="Edit invoice" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button><button onClick={() => removeInvoice(invoice)} title="Hapus invoice" className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950"><Trash2 size={14} /></button></div></td></tr>)}</tbody>
+              <thead className="bg-slate-50 text-xs text-slate-400 dark:bg-slate-800"><tr>{["Nomor", "Klien", "Dibuat", "Jatuh Tempo", "Jumlah", "Status", "Dokumen", ...(canWrite ? ["Admin"] : [])].map((item) => <th className="p-4" key={item}>{item}</th>)}</tr></thead>
+              <tbody>{shown.map((invoice) => <tr className="border-t border-slate-100 dark:border-slate-800" key={invoice.id}><td className="p-4 font-bold text-teal-700">{invoice.no}</td><td className="p-4 font-semibold">{invoice.client}</td><td className="p-4">{invoice.date}</td><td className="p-4">{invoice.due}</td><td className="p-4 font-bold">{rupiah(invoice.amount)}</td><td className="p-4"><Badge tone={invoice.status === "Lunas" ? "teal" : invoice.status === "Jatuh Tempo" ? "red" : "amber"}>{invoice.status}</Badge></td><td className="p-4"><InvoiceDownloadButton invoice={invoice} /></td>{canWrite && <td className="p-4"><div className="flex gap-1"><button onClick={() => openEditModal(invoice)} title="Edit invoice" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-teal-700 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button><button onClick={() => removeInvoice(invoice)} title="Hapus invoice" className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950"><Trash2 size={14} /></button></div></td>}</tr>)}</tbody>
             </table>
           </div>
         )}

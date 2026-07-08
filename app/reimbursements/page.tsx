@@ -50,7 +50,8 @@ export default function ReimbursementsPage() {
   }, []);
 
   const access = getUserAccess(email);
-  const visibleReimbursements = access === "admin" ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
+  const isReadOnly = access === "readonly";
+  const visibleReimbursements = access === "admin" || isReadOnly ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
   const pendingTotal = visibleReimbursements.filter((item) => ["Diajukan", "Diproses", "Disetujui"].includes(item.status)).reduce((sum, item) => sum + item.amount, 0);
   const paidTotal = visibleReimbursements.filter((item) => item.status === "Dibayar").reduce((sum, item) => sum + item.amount, 0);
   const approvedCount = visibleReimbursements.filter((item) => item.status === "Disetujui").length;
@@ -64,6 +65,7 @@ export default function ReimbursementsPage() {
 
   function submitReimbursement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isReadOnly) return;
     const data = new FormData(event.currentTarget);
     const request: Reimbursement = {
       id: editing?.id || crypto.randomUUID(),
@@ -86,6 +88,7 @@ export default function ReimbursementsPage() {
   }
 
   function updateStatus(item: Reimbursement, status: ReimbursementStatus) {
+    if (isReadOnly) return;
     updateReimbursement(item.id, { ...item, status });
   }
 
@@ -112,9 +115,9 @@ export default function ReimbursementsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
             <h2 className="font-black">Daftar Reimbursement</h2>
-            <p className="text-xs text-slate-400">{access === "admin" ? "Semua pengajuan tim" : "Pengajuan operasional kamu"}</p>
+            <p className="text-xs text-slate-400">{access === "admin" || isReadOnly ? "Semua pengajuan tim" : "Pengajuan operasional kamu"}</p>
           </div>
-          <Button onClick={() => setOpen(true)}><Plus size={16} />Ajukan</Button>
+          {!isReadOnly && <Button onClick={() => setOpen(true)}><Plus size={16} />Ajukan</Button>}
         </div>
         {!visibleReimbursements.length ? (
           <EmptyState title="Belum ada reimbursement" description="Ajukan biaya operasional pertama dari tombol Ajukan." />
@@ -122,7 +125,7 @@ export default function ReimbursementsPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-[.12em] text-slate-400 dark:bg-slate-950">
-                <tr>{["Tanggal", "Requester", "Kategori", "Project / Client", "Deskripsi", "Nominal", "Bukti", "Status", "Aksi"].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
+                <tr>{["Tanggal", "Requester", "Kategori", "Project / Client", "Deskripsi", "Nominal", "Bukti", "Status", ...(!isReadOnly ? ["Aksi"] : [])].map((item) => <th key={item} className="p-4">{item}</th>)}</tr>
               </thead>
               <tbody>
                 {visibleReimbursements.map((item) => (
@@ -135,13 +138,13 @@ export default function ReimbursementsPage() {
                     <td className="p-4 font-black">{rupiah(item.amount)}</td>
                     <td className="p-4">{item.receiptLink ? <a href={item.receiptLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-black text-teal-600"><LinkIcon size={13} />Buka</a> : "-"}</td>
                     <td className="p-4"><Badge tone={statusTone[item.status]}>{item.status}</Badge></td>
-                    <td className="p-4">
+                    {!isReadOnly && <td className="p-4">
                       <div className="flex flex-wrap gap-1">
                         <button onClick={() => { setEditing(item); setOpen(true); }} title="Edit reimbursement" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"><Pencil size={14} /></button>
                         {access === "admin" && item.status !== "Dibayar" && <button onClick={() => updateStatus(item, "Dibayar")} title="Tandai dibayar" className="grid h-9 w-9 place-items-center rounded-lg border border-teal-200 text-teal-600 hover:bg-teal-50"><CheckCircle2 size={14} /></button>}
                         {access === "admin" && item.status !== "Ditolak" && <button onClick={() => updateStatus(item, "Ditolak")} title="Tolak" className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50"><XCircle size={14} /></button>}
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
