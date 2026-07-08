@@ -62,6 +62,7 @@ const priorityTone: Record<ProjectPriority, "red" | "amber" | "slate"> = {
 const reminderOffsets = new Set([3, 1, 0, -1]);
 const socialMediaKeywords = ["social media", "content", "production"];
 const adsMarketplaceKeywords = ["meta ads", "shopee", "tiktok", "marketplace", "ads growth", "ads management"];
+type ProjectHubView = "board" | "client-board" | "timeline" | "clients" | "calendar";
 
 const avatarEmoji: Record<string, string> = {
   Lion: "🦁",
@@ -151,7 +152,7 @@ export default function ClientManagementPage() {
     addTaskNotification,
     updateTaskNotification,
   } = useAppData();
-  const [view, setView] = useState<"board" | "timeline" | "clients" | "calendar">("board");
+  const [view, setView] = useState<ProjectHubView>("board");
   const [taskModal, setTaskModal] = useState(false);
   const [progressModal, setProgressModal] = useState(false);
   const [commentModal, setCommentModal] = useState(false);
@@ -190,6 +191,15 @@ export default function ClientManagementPage() {
     return canSeeProjectName(task.project);
   };
   const visibleProjectTasks = projectTasks.filter(canSeeTask);
+  const taskClientNames = Array.from(new Set(visibleProjectTasks.map((task) => task.client || "Internal"))).sort((a, b) => {
+    const activeClientOrder = visibleActiveClients.map((client) => client.brand);
+    const indexA = activeClientOrder.indexOf(a);
+    const indexB = activeClientOrder.indexOf(b);
+    if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
   const projectOptions = Array.from(new Set(visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name))));
   const clientOptions = visibleActiveClients.map((client) => client.brand);
   const assigners = teamMembers.filter((member) => member.id === "tm-christopher" || member.id === "tm-inaya");
@@ -518,11 +528,12 @@ export default function ClientManagementPage() {
         <div className="flex flex-wrap gap-2">
           {[
             { id: "board", label: "Board", icon: Columns3 },
+            { id: "client-board", label: "Client Board", icon: UsersRound },
             { id: "timeline", label: "Timeline", icon: ChartGantt },
             { id: "clients", label: "Clients", icon: UsersRound },
             { id: "calendar", label: "Calendar", icon: CalendarDays },
           ].map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setView(id as typeof view)} className={cn("inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-black transition", view === id ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800")}>
+            <button key={id} onClick={() => setView(id as ProjectHubView)} className={cn("inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-black transition", view === id ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800")}>
               <Icon size={16} /> {label}
             </button>
           ))}
@@ -555,6 +566,62 @@ export default function ClientManagementPage() {
               </div>
             );
           })}
+        </section>
+      )}
+
+      {view === "client-board" && (
+        <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
+            <div>
+              <h2 className="font-black">Task Board per Client</h2>
+              <p className="text-xs text-slate-400">Kolom berdasarkan client, isi task diurutkan dari deadline terdekat.</p>
+            </div>
+            <Badge tone="teal">{visibleProjectTasks.length} task</Badge>
+          </div>
+          {!visibleProjectTasks.length ? <EmptyProjectState /> : (
+            <div className="flex gap-3 overflow-x-auto pb-4">
+              {taskClientNames.map((clientName) => {
+                const items = visibleProjectTasks
+                  .filter((task) => (task.client || "Internal") === clientName)
+                  .sort((a, b) => new Date(`${a.dueDate}T00:00:00`).getTime() - new Date(`${b.dueDate}T00:00:00`).getTime());
+                const activeCount = items.filter((task) => task.status !== "Done").length;
+                return (
+                  <div key={clientName} className="min-h-[480px] w-[320px] shrink-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-950">
+                    <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-black">{clientName}</h3>
+                          <p className="mt-1 text-xs text-slate-400">{activeCount} active task</p>
+                        </div>
+                        <Badge tone="slate">{items.length}</Badge>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {items.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          member={memberById(task.assigneeId)}
+                          assigner={memberById(task.assignedById)}
+                          watcher={memberById(task.watcherId)}
+                          canMove={false}
+                          canEdit={canEditTask(task)}
+                          canProgress={canProgressTask(task)}
+                          canComment={canCommentTask(task)}
+                          showStatus
+                          showMoveLock={false}
+                          onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setTaskModal(true); }}
+                          onProgress={() => openProgress(task)}
+                          onComment={() => openComment(task)}
+                          onRemove={() => removeTask(task)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
@@ -810,6 +877,8 @@ function TaskCard({
   canEdit,
   canProgress,
   canComment,
+  showStatus = false,
+  showMoveLock = true,
   onEdit,
   onProgress,
   onComment,
@@ -823,6 +892,8 @@ function TaskCard({
   canEdit: boolean;
   canProgress: boolean;
   canComment: boolean;
+  showStatus?: boolean;
+  showMoveLock?: boolean;
   onEdit: () => void;
   onProgress: () => void;
   onComment: () => void;
@@ -836,6 +907,7 @@ function TaskCard({
         <div className="min-w-0">
           <h4 className="truncate text-sm font-black">{task.title}</h4>
           <p className="mt-1 truncate text-xs text-slate-400">{task.project} · {task.client || "Internal"}</p>
+          {showStatus && <div className="mt-2"><Badge tone={task.status === "Done" ? "teal" : task.status === "In Progress" || task.status === "Review" ? "amber" : "slate"}>{statusMeta[task.status].label}</Badge></div>}
         </div>
         <div className="flex gap-1">
           <button onClick={onEdit} disabled={!canEdit} title={canEdit ? "Edit task" : "Hanya pemberi assign yang bisa edit"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" : "border-slate-100 text-slate-300")}><Pencil size={14} /></button>
@@ -849,7 +921,7 @@ function TaskCard({
         <span>Assigned by {assigner.name}</span>
         <span>Pengawas {watcher.name}</span>
       </div>
-      {!canMove && <div className="mt-3 inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-800"><Lock size={11} /> Board move dikunci untuk assignee</div>}
+      {showMoveLock && !canMove && <div className="mt-3 inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-800"><Lock size={11} /> Board move dikunci untuk assignee</div>}
       <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-300">{task.description || "Belum ada catatan."}</p>
       {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{member.name}: </span>{latestUpdate.note}</div>}
       {latestComment && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800"><span className="font-black">{watcher.name}: </span>{latestComment.note}</div>}
