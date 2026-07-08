@@ -7,8 +7,9 @@ import { Badge, Card } from "@/components/ui";
 import { getUserAccess } from "@/lib/auth";
 import { getClientProjects, getClientValue, stages } from "@/lib/data";
 import type { TeamMember } from "@/lib/client-projects";
+import { financial2026 } from "@/lib/financial-2024";
 import { rupiah } from "@/lib/utils";
-import { BriefcaseBusiness, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall, ReceiptText, UsersRound } from "lucide-react";
+import { BriefcaseBusiness, CircleDollarSign, Clock3, CreditCard, ListChecks, PhoneCall, ReceiptText, TrendingDown, TrendingUp, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -67,6 +68,18 @@ export default function Dashboard() {
   const activeClients = visibleActiveClients.length;
   const visibleReimbursements = access === "admin" ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
   const pendingReimbursements = visibleReimbursements.filter((item) => ["Diajukan", "Diproses", "Disetujui"].includes(item.status)).length;
+  const activeClientProjects = visibleActiveClients.flatMap((client) => getClientProjects(client).map((project) => ({ client: client.brand, project })));
+  const monthlyProjectValue = activeClientProjects.reduce((sum, item) => sum + (item.project.monthlyFee || 0), 0);
+  const nonFixedProjectCount = activeClientProjects.filter((item) => !item.project.monthlyFee && item.project.feeNote).length;
+  const latestFinancialMonths = financial2026.months.slice(-3);
+  const financialSummary = latestFinancialMonths.reduce((summary, month) => ({
+    revenue: summary.revenue + month.revenue,
+    expenses: summary.expenses + month.expenses,
+    netIncome: summary.netIncome + month.netIncome,
+  }), { revenue: 0, expenses: 0, netIncome: 0 });
+  const firstFinancialMonth = latestFinancialMonths[0];
+  const lastFinancialMonth = latestFinancialMonths[latestFinancialMonths.length - 1];
+  const revenueTrend = firstFinancialMonth && lastFinancialMonth ? lastFinancialMonth.revenue - firstFinancialMonth.revenue : 0;
   const stats = [
     { label: "Task Aktif", value: String(visibleActiveProjects), icon: BriefcaseBusiness },
     { label: "CRM Pipeline", value: rupiah(openPipeline), icon: CreditCard },
@@ -78,6 +91,12 @@ export default function Dashboard() {
     { label: "Active Client", value: String(activeClients), icon: UsersRound },
     { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
     { label: "Reimbursement Proses", value: String(pendingReimbursements), icon: ReceiptText },
+  ];
+  const readOnlyStats = [
+    { label: "Active Client", value: String(activeClients), helper: "Client aktif saat ini", icon: UsersRound },
+    { label: "Nilai Project / Bulan", value: rupiah(monthlyProjectValue), helper: nonFixedProjectCount ? `${nonFixedProjectCount} project berbasis persentase belum masuk angka` : "Fixed monthly fee", icon: BriefcaseBusiness },
+    { label: "Pendapatan 3 Bulan", value: rupiah(financialSummary.revenue), helper: financial2026.period, icon: CircleDollarSign },
+    { label: "Net Income 3 Bulan", value: rupiah(financialSummary.netIncome), helper: revenueTrend >= 0 ? "Revenue naik dari bulan awal" : "Revenue turun dari bulan awal", icon: revenueTrend >= 0 ? TrendingUp : TrendingDown },
   ];
 
   const upcomingItems = [
@@ -180,6 +199,106 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+          </Card>
+        </section>
+      </>
+    );
+  }
+
+  if (access === "readonly") {
+    return (
+      <>
+        <Header title="Selamat pagi, Gaby" subtitle="Dashboard monitoring GrowthHive: client aktif, nilai project bulanan, dan performa keuangan terbaru." />
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {readOnlyStats.map(({ label, value, helper, icon: Icon }) => (
+            <Card key={label} className="p-5">
+              <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-700"><Icon size={20} /></div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p>
+              <p className="mt-2 text-xl font-black text-ink dark:text-white">{value}</p>
+              <p className="mt-2 min-h-8 text-xs leading-4 text-slate-400">{helper}</p>
+            </Card>
+          ))}
+        </section>
+
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_1fr]">
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div>
+                <h2 className="font-black">Nilai Project per Bulan</h2>
+                <p className="text-xs text-slate-400">Hanya menghitung project active client dengan fixed monthly fee</p>
+              </div>
+              <Badge tone="teal">{activeClientProjects.length} project</Badge>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400 dark:bg-slate-900/70">
+                  <tr>
+                    <th className="px-5 py-4">Client</th>
+                    <th className="px-5 py-4">Scope</th>
+                    <th className="px-5 py-4">Nilai / Bulan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {activeClientProjects.map(({ client, project }) => (
+                    <tr key={project.id}>
+                      <td className="px-5 py-4 font-black text-ink dark:text-white">{client}</td>
+                      <td className="px-5 py-4 text-slate-500">{project.scope || project.name}</td>
+                      <td className="px-5 py-4 font-bold">{project.monthlyFee ? rupiah(project.monthlyFee) : project.feeNote || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <div className="p-5">
+              <h2 className="font-black">Performa Keuangan 3 Bulan</h2>
+              <p className="text-xs text-slate-400">Disusun per bulan dari laporan {financial2026.year}</p>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {latestFinancialMonths.map((month) => (
+                <div key={month.month} className="p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <p className="font-black text-ink dark:text-white">{month.month} {financial2026.year}</p>
+                    <Badge tone={month.netIncome >= 0 ? "teal" : "red"}>{month.netIncome >= 0 ? "Profit" : "Loss"}</Badge>
+                  </div>
+                  <div className="grid gap-3 text-xs">
+                    <div className="flex justify-between gap-3"><span className="text-slate-400">Pendapatan</span><span className="font-bold">{rupiah(month.revenue)}</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-slate-400">Biaya</span><span className="font-bold">{rupiah(month.expenses)}</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-slate-400">Net Income</span><span className={month.netIncome < 0 ? "font-black text-rose-600" : "font-black text-teal-700"}>{rupiah(month.netIncome)}</span></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <Card className="p-5">
+            <h2 className="font-black">Ringkasan Active Client</h2>
+            <p className="mb-5 text-xs text-slate-400">Distribusi scope kerja sama client aktif</p>
+            <div className="space-y-3">
+              {visibleActiveClients.map((client) => (
+                <div key={client.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm dark:border-slate-800">
+                  <div>
+                    <p className="font-black">{client.brand}</p>
+                    <p className="mt-1 text-xs text-slate-400">{client.cooperationScope || client.service}</p>
+                  </div>
+                  <Badge tone="teal">{rupiah(getClientValue(client))}</Badge>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="font-black">Akumulasi 3 Bulan Terakhir</h2>
+            <p className="mb-5 text-xs text-slate-400">Total pendapatan, biaya, dan net income dari {latestFinancialMonths.map((month) => month.month).join(", ")} {financial2026.year}</p>
+            <div className="space-y-4 text-sm">
+              <div className="flex justify-between border-b border-slate-100 pb-3 dark:border-slate-800"><span className="font-semibold text-slate-500">Pendapatan</span><span className="font-black">{rupiah(financialSummary.revenue)}</span></div>
+              <div className="flex justify-between border-b border-slate-100 pb-3 dark:border-slate-800"><span className="font-semibold text-slate-500">Biaya</span><span className="font-black">{rupiah(financialSummary.expenses)}</span></div>
+              <div className="flex justify-between"><span className="font-semibold text-slate-500">Net Income</span><span className={financialSummary.netIncome < 0 ? "font-black text-rose-600" : "font-black text-teal-700"}>{rupiah(financialSummary.netIncome)}</span></div>
+            </div>
           </Card>
         </section>
       </>
