@@ -3,11 +3,10 @@ export type ProjectStatus = "Backlog" | "Scheduled" | "In Progress" | "Review" |
 export type ProjectPriority = "High" | "Medium" | "Low";
 
 export type TeamRole =
-  | "CEO"
-  | "Marketplace & Ads Performance"
-  | "Creative Project Manager"
-  | "Social Media Specialist"
-  | "Project Manager";
+  | "PIC / Owner / Founder"
+  | "Project Manager"
+  | "Social Media Specialist / Ads Specialist"
+  | "Graphic Designer";
 
 export type TeamMember = {
   id: string;
@@ -95,11 +94,10 @@ export type AppCalendarEvent = {
 export const projectStatuses: ProjectStatus[] = ["Backlog", "Scheduled", "In Progress", "Review", "Done"];
 
 export const teamRoles: TeamRole[] = [
-  "CEO",
-  "Marketplace & Ads Performance",
-  "Creative Project Manager",
-  "Social Media Specialist",
   "Project Manager",
+  "Social Media Specialist / Ads Specialist",
+  "Graphic Designer",
+  "PIC / Owner / Founder",
 ];
 
 export const zooAvatars = ["Lion", "Panda", "Koala", "Tiger", "Giraffe", "Penguin", "Fox", "Elephant", "Zebra", "Otter"];
@@ -109,7 +107,7 @@ export const teamMembers: TeamMember[] = [
     id: "tm-christopher",
     name: "Christopher",
     email: "growthiveofficial@gmail.com",
-    role: "CEO",
+    role: "PIC / Owner / Founder",
     avatar: "Lion",
     color: "bg-amber-100 text-amber-800",
   },
@@ -117,7 +115,7 @@ export const teamMembers: TeamMember[] = [
     id: "tm-joshua",
     name: "Joshua",
     email: "joshua.ramadhan@gmail.com",
-    role: "Marketplace & Ads Performance",
+    role: "Social Media Specialist / Ads Specialist",
     avatar: "Panda",
     color: "bg-sky-100 text-sky-800",
   },
@@ -125,7 +123,7 @@ export const teamMembers: TeamMember[] = [
     id: "tm-inaya",
     name: "Inaya",
     email: "bariahinayatul@gmail.com",
-    role: "Creative Project Manager",
+    role: "Project Manager",
     avatar: "Koala",
     color: "bg-rose-100 text-rose-800",
   },
@@ -133,7 +131,7 @@ export const teamMembers: TeamMember[] = [
     id: "tm-sellina",
     name: "Sellina",
     email: "sellinaukrida2020@gmail.com",
-    role: "Social Media Specialist",
+    role: "Social Media Specialist / Ads Specialist",
     avatar: "Tiger",
     color: "bg-violet-100 text-violet-800",
   },

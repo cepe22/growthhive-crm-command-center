@@ -239,7 +239,8 @@ export type Reimbursement = {
   client?: string;
   amount: number;
   description: string;
-  receiptLink?: string;
+  receiptImage?: string;
+  receiptFileName?: string;
   status: ReimbursementStatus;
   submittedAt: string;
   notes?: string;

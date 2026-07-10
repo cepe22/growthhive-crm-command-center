@@ -64,6 +64,13 @@ const socialMediaKeywords = ["social media", "content", "production"];
 const adsMarketplaceKeywords = ["meta ads", "shopee", "tiktok", "marketplace", "ads growth", "ads management"];
 type ProjectHubView = "board" | "client-board" | "timeline" | "clients" | "calendar";
 
+const roleRank: Record<TeamRole, number> = {
+  "PIC / Owner / Founder": 1,
+  "Project Manager": 2,
+  "Social Media Specialist / Ads Specialist": 3,
+  "Graphic Designer": 4,
+};
+
 const avatarEmoji: Record<string, string> = {
   Lion: "🦁",
   Panda: "🐼",
@@ -171,10 +178,12 @@ export default function ClientManagementPage() {
   const isAdmin = access === "admin";
   const isReadOnly = access === "readonly";
   const canReadAll = isAdmin || isReadOnly;
+  const currentRoleRank = currentMember ? roleRank[currentMember.role] : Number.POSITIVE_INFINITY;
+  const canCreateTask = Boolean(!isReadOnly && currentMember && currentRoleRank <= 2);
   const canMoveTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
   const canEditTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assignedById === currentMember.id);
   const canProgressTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
-  const canCommentTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.watcherId === currentMember.id);
+  const canCommentTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && [task.assigneeId, task.watcherId].includes(currentMember.id));
   const activeClients = clients.filter((client) => client.stage === "Client (Active)");
   const allowedProjectKeywords = canReadAll ? [] : memberProjectKeywords(currentMember);
   const canSeeProjectName = (projectName: string) => canReadAll || textMatchesKeywords(projectName, allowedProjectKeywords);
@@ -202,8 +211,9 @@ export default function ClientManagementPage() {
   });
   const projectOptions = Array.from(new Set(visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name))));
   const clientOptions = visibleActiveClients.map((client) => client.brand);
-  const assigners = teamMembers.filter((member) => member.id === "tm-christopher" || member.id === "tm-inaya");
-  const defaultAssigner = assigners.find((member) => member.id === currentMember?.id) || assigners[0] || teamMembers[0];
+  const eligibleAssignees = teamMembers.filter((member) => roleRank[member.role] > currentRoleRank);
+  const eligibleWatchers = teamMembers.filter((member) => roleRank[member.role] >= currentRoleRank);
+  const defaultAssigner = currentMember || teamMembers[0];
   const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
   const taskClientOptions = Array.from(new Set([...(editingTask?.client ? [editingTask.client] : []), ...clientOptions]));
   const activeTasks = visibleProjectTasks.filter((task) => task.status !== "Done");
@@ -289,14 +299,14 @@ export default function ClientManagementPage() {
   }, [projectTasks, teamMembers]);
 
   function openNewTask() {
-    if (isReadOnly) return;
+    if (!canCreateTask) return;
     setEditingTask(null);
     setTaskModal(true);
   }
 
   function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isReadOnly) return;
+    if (!canCreateTask || !currentMember) return;
     if (editingTask && !canEditTask(editingTask)) return;
     const data = new FormData(event.currentTarget);
     const previousAssigneeId = editingTask?.assigneeId;
@@ -310,7 +320,7 @@ export default function ClientManagementPage() {
       client: String(data.get("client")),
       status: String(data.get("status")) as ProjectStatus,
       assigneeId: nextAssigneeId,
-      assignedById: String(data.get("assignedById")),
+      assignedById: currentMember.id,
       watcherId: String(data.get("watcherId")),
       dueDate: String(data.get("dueDate")),
       priority: String(data.get("priority")) as ProjectPriority,
@@ -407,7 +417,7 @@ export default function ClientManagementPage() {
         ...(progressTask.progressUpdates || []),
         {
           id: crypto.randomUUID(),
-          authorId: progressTask.assigneeId,
+          authorId: currentMember?.id || progressTask.assigneeId,
           date: today(),
           note: String(data.get("note")),
         },
@@ -424,7 +434,7 @@ export default function ClientManagementPage() {
     const data = new FormData(event.currentTarget);
     const comment: TaskComment = {
       id: crypto.randomUUID(),
-      authorId: commentTask.watcherId,
+      authorId: currentMember?.id || commentTask.watcherId,
       date: today(),
       note: String(data.get("note")),
     };
@@ -538,7 +548,7 @@ export default function ClientManagementPage() {
             </button>
           ))}
         </div>
-        {!isReadOnly && <div className="flex flex-wrap gap-2">
+        {canCreateTask && <div className="flex flex-wrap gap-2">
           <Button onClick={openNewTask}><Plus size={16} />Task</Button>
           <Button variant="outline" onClick={() => setEventModal(true)}><CalendarPlus size={16} />Event</Button>
         </div>}
@@ -771,11 +781,11 @@ export default function ClientManagementPage() {
           <div className="grid gap-3 md:grid-cols-2">
             <label>
               <span className="mb-2 block text-xs font-bold">Assign ke</span>
-              <select name="assigneeId" defaultValue={editingTask?.assigneeId || teamMembers[0]?.id} className={fieldClass}>{teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+              <select name="assigneeId" defaultValue={editingTask?.assigneeId || eligibleAssignees[0]?.id} className={fieldClass}>{eligibleAssignees.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
             </label>
             <label>
               <span className="mb-2 block text-xs font-bold">Assigned by</span>
-              <select name="assignedById" defaultValue={editingTask?.assignedById || defaultAssigner?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+              <input value={`${defaultAssigner.name} · ${defaultAssigner.role}`} readOnly className={`${fieldClass} cursor-not-allowed bg-slate-50 text-slate-500`} />
             </label>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -785,11 +795,12 @@ export default function ClientManagementPage() {
           </div>
           <label>
             <span className="mb-2 block text-xs font-bold">Pengawas progress</span>
-            <select name="watcherId" defaultValue={editingTask?.watcherId || editingTask?.assignedById || defaultAssigner?.id} className={fieldClass}>{assigners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+            <select name="watcherId" defaultValue={editingTask?.watcherId || defaultAssigner?.id} className={fieldClass}>{eligibleWatchers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
           </label>
           <textarea name="description" defaultValue={editingTask?.description || ""} rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Catatan singkat" />
           {!visibleActiveClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Belum ada client active yang sesuai dengan scope akses akun ini.</p>}
-          <Button disabled={!taskProjectOptions.length || !taskClientOptions.length} className="w-full">Simpan Task</Button>
+          <p className="rounded-lg bg-slate-50 p-3 text-xs font-bold text-slate-500 dark:bg-slate-800">Task hanya dapat diberikan ke role di bawah pemberi assign. Pengawas progress tidak dapat dipilih dari role yang lebih tinggi.</p>
+          <Button disabled={!taskProjectOptions.length || !taskClientOptions.length || !eligibleAssignees.length} className="w-full">Simpan Task</Button>
         </form>
       </Modal>
 
@@ -814,7 +825,7 @@ export default function ClientManagementPage() {
 
       <Modal open={commentModal} title={`Komentar PIC · ${commentTask?.title || ""}`} onClose={() => { setCommentModal(false); setCommentTask(null); }}>
         {commentTask && <form onSubmit={submitComment} className="space-y-4">
-          <div className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-800">Komentar tambahan hanya bisa ditulis oleh pengawas/PIC: {memberById(commentTask.watcherId).name}</div>
+          <div className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-800">Komentar dapat ditulis oleh assignee atau pengawas/PIC: {memberById(commentTask.watcherId).name}</div>
           <textarea name="note" required rows={5} className={`${fieldClass} h-auto py-3`} placeholder="Tulis komentar, arahan, atau feedback tambahan" />
           <div className="space-y-3">
             {(commentTask.comments || []).slice().reverse().map((comment) => (
@@ -924,7 +935,7 @@ function TaskCard({
       {showMoveLock && !canMove && <div className="mt-3 inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-800"><Lock size={11} /> Board move dikunci untuk assignee</div>}
       <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-300">{task.description || "Belum ada catatan."}</p>
       {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{member.name}: </span>{latestUpdate.note}</div>}
-      {latestComment && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800"><span className="font-black">{watcher.name}: </span>{latestComment.note}</div>}
+      {latestComment && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800"><span className="font-black">{latestComment.authorId === member.id ? member.name : watcher.name}: </span>{latestComment.note}</div>}
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
         <Badge tone={priorityTone[task.priority]}>{task.priority}</Badge>
         <span className="text-xs font-black text-slate-500">{formatDate(task.dueDate)}</span>

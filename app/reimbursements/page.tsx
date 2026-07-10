@@ -9,7 +9,7 @@ import { Badge, Button, Card } from "@/components/ui";
 import { getUserAccess } from "@/lib/auth";
 import { type Reimbursement, type ReimbursementStatus } from "@/lib/data";
 import { rupiah } from "@/lib/utils";
-import { CheckCircle2, Clock3, FileText, LinkIcon, Pencil, Plus, ReceiptText, WalletCards, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, FileText, ImageIcon, Pencil, Plus, ReceiptText, WalletCards, XCircle } from "lucide-react";
 
 const statuses: ReimbursementStatus[] = ["Diajukan", "Diproses", "Disetujui", "Ditolak", "Dibayar"];
 
@@ -36,11 +36,36 @@ function displayName(email: string) {
   return email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+async function compressReceiptImage(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("Bukti harus berupa file gambar.");
+  const source = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Foto bukti tidak dapat dibaca."));
+    };
+    image.src = url;
+  });
+  const maxSize = 1600;
+  const scale = Math.min(1, maxSize / Math.max(source.width, source.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 export default function ReimbursementsPage() {
   const { reimbursements, addReimbursement, updateReimbursement, projectTasks } = useAppData();
   const [email, setEmail] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Reimbursement | null>(null);
+  const [receiptError, setReceiptError] = useState("");
 
   useEffect(() => {
     fetch("/api/session")
@@ -61,12 +86,26 @@ export default function ReimbursementsPage() {
   function closeModal() {
     setOpen(false);
     setEditing(null);
+    setReceiptError("");
   }
 
-  function submitReimbursement(event: FormEvent<HTMLFormElement>) {
+  async function submitReimbursement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isReadOnly) return;
     const data = new FormData(event.currentTarget);
+    const receipt = data.get("receiptImage");
+    let receiptImage = editing?.receiptImage || "";
+    let receiptFileName = editing?.receiptFileName || "";
+    if (receipt instanceof File && receipt.size > 0) {
+      try {
+        receiptImage = await compressReceiptImage(receipt);
+        receiptFileName = receipt.name;
+        setReceiptError("");
+      } catch (error) {
+        setReceiptError(error instanceof Error ? error.message : "Foto bukti tidak dapat diproses.");
+        return;
+      }
+    }
     const request: Reimbursement = {
       id: editing?.id || crypto.randomUUID(),
       requesterEmail: editing?.requesterEmail || email,
@@ -77,7 +116,8 @@ export default function ReimbursementsPage() {
       client: String(data.get("client") || ""),
       amount: Number(data.get("amount") || 0),
       description: String(data.get("description")),
-      receiptLink: String(data.get("receiptLink") || ""),
+      receiptImage,
+      receiptFileName,
       status: access === "admin" ? (String(data.get("status")) as ReimbursementStatus) : editing?.status || "Diajukan",
       submittedAt: editing?.submittedAt || new Date().toISOString(),
       notes: access === "admin" ? String(data.get("notes") || "") : editing?.notes,
@@ -136,7 +176,7 @@ export default function ReimbursementsPage() {
                     <td className="p-4 text-xs text-slate-500">{[item.project, item.client].filter(Boolean).join(" / ") || "-"}</td>
                     <td className="max-w-xs p-4"><p className="line-clamp-2 text-xs leading-5 text-slate-500">{item.description}</p></td>
                     <td className="p-4 font-black">{rupiah(item.amount)}</td>
-                    <td className="p-4">{item.receiptLink ? <a href={item.receiptLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-black text-teal-600"><LinkIcon size={13} />Buka</a> : "-"}</td>
+                    <td className="p-4">{item.receiptImage ? <a href={item.receiptImage} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-black text-teal-600"><ImageIcon size={13} />Lihat foto</a> : "-"}</td>
                     <td className="p-4"><Badge tone={statusTone[item.status]}>{item.status}</Badge></td>
                     {!isReadOnly && <td className="p-4">
                       <div className="flex flex-wrap gap-1">
@@ -183,9 +223,12 @@ export default function ReimbursementsPage() {
           </label>
           <textarea name="description" required rows={4} defaultValue={editing?.description || ""} className={`${fieldClass} h-auto py-3`} placeholder="Jelaskan kebutuhan operasionalnya" />
           <label>
-            <span className="mb-2 block text-xs font-bold">Link bukti</span>
-            <input name="receiptLink" defaultValue={editing?.receiptLink || ""} className={fieldClass} placeholder="Google Drive / link receipt, opsional" />
+            <span className="mb-2 block text-xs font-bold">Foto bukti</span>
+            <input name="receiptImage" type="file" accept="image/*" className={`${fieldClass} cursor-pointer py-2`} />
+            <span className="mt-2 block text-[11px] text-slate-400">Upload screenshot atau foto bukti transaksi. Foto otomatis diperkecil agar lebih ringan.</span>
           </label>
+          {receiptError && <p className="rounded-lg bg-rose-50 p-3 text-xs font-bold text-rose-700">{receiptError}</p>}
+          {editing?.receiptImage && <a href={editing.receiptImage} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-black text-teal-600"><ImageIcon size={14} />Lihat foto bukti yang tersimpan{editing.receiptFileName ? `: ${editing.receiptFileName}` : ""}</a>}
           {access === "admin" && (
             <div className="grid gap-3 md:grid-cols-2">
               <label>
