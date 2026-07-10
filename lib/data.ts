@@ -229,6 +229,28 @@ export type Expense = {
 
 export type ReimbursementStatus = "Diajukan" | "Diproses" | "Disetujui" | "Ditolak" | "Dibayar";
 
+export type ReimbursementItem = {
+  id: string;
+  date: string;
+  category: string;
+  project?: string;
+  client?: string;
+  amount: number;
+  description: string;
+  receiptImage?: string;
+  receiptFileName?: string;
+};
+
+export type ReimbursementNotification = {
+  id: string;
+  reimbursementId: string;
+  recipientEmail: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+};
+
 export type Reimbursement = {
   id: string;
   requesterEmail: string;
@@ -241,10 +263,30 @@ export type Reimbursement = {
   description: string;
   receiptImage?: string;
   receiptFileName?: string;
+  items?: ReimbursementItem[];
   status: ReimbursementStatus;
   submittedAt: string;
   notes?: string;
 };
+
+export function getReimbursementItems(reimbursement: Reimbursement): ReimbursementItem[] {
+  if (reimbursement.items?.length) return reimbursement.items;
+  return [{
+    id: `${reimbursement.id}-legacy-item`,
+    date: reimbursement.date,
+    category: reimbursement.category,
+    project: reimbursement.project,
+    client: reimbursement.client,
+    amount: reimbursement.amount,
+    description: reimbursement.description,
+    receiptImage: reimbursement.receiptImage,
+    receiptFileName: reimbursement.receiptFileName,
+  }];
+}
+
+export function getReimbursementAmount(reimbursement: Reimbursement) {
+  return getReimbursementItems(reimbursement).reduce((sum, item) => sum + item.amount, 0);
+}
 
 export const clients: Client[] = activeGhClients;
 export const invoices: Invoice[] = [];

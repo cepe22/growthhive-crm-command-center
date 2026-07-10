@@ -1,6 +1,6 @@
 "use client";
 
-import { activeGhClients, type Client, type Expense, type Invoice, type Reimbursement } from "@/lib/data";
+import { activeGhClients, type Client, type Expense, type Invoice, type Reimbursement, type ReimbursementNotification } from "@/lib/data";
 import {
   appCalendarEvents as initialCalendarEvents,
   dailyWorkPlans as initialDailyWorkPlans,
@@ -24,6 +24,7 @@ type AppData = {
   invoices: Invoice[];
   expenses: Expense[];
   reimbursements: Reimbursement[];
+  reimbursementNotifications: ReimbursementNotification[];
   taskNotifications: TaskNotification[];
   addClient: (client: Client) => void;
   updateClient: (id: string, client: Client) => void;
@@ -43,6 +44,9 @@ type AppData = {
   addExpense: (expense: Expense) => void;
   addReimbursement: (reimbursement: Reimbursement) => void;
   updateReimbursement: (id: string, reimbursement: Reimbursement) => void;
+  deleteReimbursement: (id: string) => void;
+  addReimbursementNotification: (notification: ReimbursementNotification) => void;
+  updateReimbursementNotification: (id: string, notification: ReimbursementNotification) => void;
   addTaskNotification: (notification: TaskNotification) => void;
   updateTaskNotification: (id: string, notification: TaskNotification) => void;
 };
@@ -90,6 +94,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [invoices, setInvoices] = useStoredState<Invoice[]>("gh-invoices", []);
   const [expenses, setExpenses] = useStoredState<Expense[]>("gh-expenses", []);
   const [reimbursements, setReimbursements] = useStoredState<Reimbursement[]>("gh-reimbursements-v1", []);
+  const [reimbursementNotifications, setReimbursementNotifications] = useStoredState<ReimbursementNotification[]>("gh-reimbursement-notifications-v1", []);
   const [taskNotifications, setTaskNotifications] = useStoredState<TaskNotification[]>("gh-task-notifications-v1", []);
 
   useEffect(() => {
@@ -134,6 +139,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         invoices,
         expenses,
         reimbursements,
+        reimbursementNotifications,
         taskNotifications,
         addClient: (client) => setClients((items) => [...items, client]),
         updateClient: (id, client) => setClients((items) => items.map((item) => (item.id === id ? client : item))),
@@ -153,6 +159,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         addExpense: (expense) => setExpenses((items) => [expense, ...items]),
         addReimbursement: (reimbursement) => setReimbursements((items) => [reimbursement, ...items]),
         updateReimbursement: (id, reimbursement) => setReimbursements((items) => items.map((item) => (item.id === id ? reimbursement : item))),
+        deleteReimbursement: (id) => setReimbursements((items) => items.filter((item) => item.id !== id)),
+        addReimbursementNotification: (notification) => setReimbursementNotifications((items) => [notification, ...items]),
+        updateReimbursementNotification: (id, notification) => setReimbursementNotifications((items) => items.map((item) => (item.id === id ? notification : item))),
         addTaskNotification: (notification) => setTaskNotifications((items) => [notification, ...items]),
         updateTaskNotification: (id, notification) => setTaskNotifications((items) => items.map((item) => (item.id === id ? notification : item))),
       }}
