@@ -6,7 +6,8 @@ export type TeamRole =
   | "PIC / Owner / Founder"
   | "Project Manager"
   | "Social Media Specialist / Ads Specialist"
-  | "Graphic Designer";
+  | "Graphic Designer"
+  | "Graphic Designer Intern";
 
 export type TeamMember = {
   id: string;
@@ -97,6 +98,7 @@ export const teamRoles: TeamRole[] = [
   "Project Manager",
   "Social Media Specialist / Ads Specialist",
   "Graphic Designer",
+  "Graphic Designer Intern",
   "PIC / Owner / Founder",
 ];
 
@@ -134,6 +136,14 @@ export const teamMembers: TeamMember[] = [
     role: "Social Media Specialist / Ads Specialist",
     avatar: "Tiger",
     color: "bg-violet-100 text-violet-800",
+  },
+  {
+    id: "tm-xiu",
+    name: "Xiu",
+    email: "margareth13105@gmail.com",
+    role: "Graphic Designer Intern",
+    avatar: "Giraffe",
+    color: "bg-emerald-100 text-emerald-800",
   },
 ];
 

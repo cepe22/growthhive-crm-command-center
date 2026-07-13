@@ -69,6 +69,7 @@ const roleRank: Record<TeamRole, number> = {
   "Project Manager": 2,
   "Social Media Specialist / Ads Specialist": 3,
   "Graphic Designer": 4,
+  "Graphic Designer Intern": 4,
 };
 
 const avatarEmoji: Record<string, string> = {

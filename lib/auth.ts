@@ -4,6 +4,7 @@ export const allowedTeamEmails = [
   "sellinaukrida2020@gmail.com",
   "growthiveofficial@gmail.com",
   "hi.growthive@gmail.com",
+  "margareth13105@gmail.com",
 ] as const;
 
 export const adminEmails = ["growthiveofficial@gmail.com"] as const;
@@ -83,6 +84,10 @@ export function defaultLoginPassword() {
   return process.env.TEMP_LOGIN_PASSWORD || "GrowthHive2026!";
 }
 
+const initialUserPasswords: Partial<Record<(typeof allowedTeamEmails)[number], string>> = {
+  "margareth13105@gmail.com": "Growthive123",
+};
+
 export async function passwordHash(email: string, password: string) {
   return hmac(`${normalizeEmail(email)}:${password}`);
 }
@@ -109,6 +114,8 @@ export async function verifyLoginPassword(email: string, password: string, overr
   const overrides = await readPasswordOverrides(overrideToken);
   const override = overrides[normalizedEmail];
   if (override) return override === await passwordHash(normalizedEmail, password);
+  const initialPassword = initialUserPasswords[normalizedEmail as (typeof allowedTeamEmails)[number]];
+  if (initialPassword) return password === initialPassword;
   return password === defaultLoginPassword();
 }
 

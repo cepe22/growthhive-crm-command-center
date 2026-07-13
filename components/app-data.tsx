@@ -54,7 +54,7 @@ type AppData = {
 const DataContext = createContext<AppData | null>(null);
 const activeClientSeedVersion = "gh-active-clients-2026-07-07-v2";
 const calendarCleanupVersion = "gh-calendar-cleanup-2026-07-07-v1";
-const teamEmailSyncVersion = "gh-team-email-sync-2026-07-10-v2";
+const teamEmailSyncVersion = "gh-team-email-sync-2026-07-13-v3";
 
 function mergeActiveGhClients(existing: Client[]) {
   const seededBrands = new Set(activeGhClients.map((client) => client.brand.toLowerCase()));
@@ -121,10 +121,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (localStorage.getItem("gh-team-email-sync-version") === teamEmailSyncVersion) return;
-    setTeamMembers((members) => members.map((member) => {
+    setTeamMembers((members) => {
+      const syncedMembers = members.map((member) => {
       const source = initialTeamMembers.find((item) => item.id === member.id);
       return source ? { ...member, email: source.email, role: source.role } : member;
-    }));
+      });
+      const existingIds = new Set(syncedMembers.map((member) => member.id));
+      return [...syncedMembers, ...initialTeamMembers.filter((member) => !existingIds.has(member.id))];
+    });
     localStorage.setItem("gh-team-email-sync-version", teamEmailSyncVersion);
   }, [setTeamMembers]);
 
