@@ -3,6 +3,7 @@ import { authCookies, getUserAccess, verifySessionToken } from "@/lib/auth";
 
 const teamAllowedPaths = ["/", "/client-management", "/reimbursements", "/account"];
 const teamBlockedPaths = ["/crm", "/clients", "/invoices", "/finance", "/reports", "/settings"];
+const financeReadOnlyAllowedPaths = ["/", "/clients", "/reports", "/account"];
 
 function pathStartsWith(pathname: string, paths: string[]) {
   return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -17,6 +18,7 @@ export async function middleware(request: NextRequest) {
   if (!email && !isLogin) return NextResponse.redirect(new URL("/login", request.url));
   if (email && isLogin) return NextResponse.redirect(new URL("/", request.url));
   if (access === "readonly" && pathStartsWith(request.nextUrl.pathname, ["/settings"])) return NextResponse.redirect(new URL("/", request.url));
+  if (access === "finance_readonly" && !pathStartsWith(request.nextUrl.pathname, financeReadOnlyAllowedPaths)) return NextResponse.redirect(new URL("/", request.url));
   if (access === "team" && pathStartsWith(request.nextUrl.pathname, teamBlockedPaths)) return NextResponse.redirect(new URL("/", request.url));
   if (access === "team" && !pathStartsWith(request.nextUrl.pathname, teamAllowedPaths)) return NextResponse.redirect(new URL("/", request.url));
   return NextResponse.next();

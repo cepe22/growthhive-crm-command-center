@@ -5,12 +5,14 @@ export const allowedTeamEmails = [
   "growthiveofficial@gmail.com",
   "hi.growthive@gmail.com",
   "margareth13105@gmail.com",
+  "riko.yf@gmail.com",
 ] as const;
 
 export const adminEmails = ["growthiveofficial@gmail.com"] as const;
 export const readOnlyEmails = ["hi.growthive@gmail.com"] as const;
+export const financeReadOnlyEmails = ["riko.yf@gmail.com"] as const;
 
-export type UserAccess = "admin" | "team" | "readonly";
+export type UserAccess = "admin" | "team" | "readonly" | "finance_readonly";
 
 const sessionCookieName = "gh-session";
 const userEmailCookieName = "gh-user-email";
@@ -56,8 +58,14 @@ export function isReadOnlyEmail(email?: string | null) {
   return readOnlyEmails.includes(normalizeEmail(email) as (typeof readOnlyEmails)[number]);
 }
 
+export function isFinanceReadOnlyEmail(email?: string | null) {
+  if (!email) return false;
+  return financeReadOnlyEmails.includes(normalizeEmail(email) as (typeof financeReadOnlyEmails)[number]);
+}
+
 export function getUserAccess(email?: string | null): UserAccess | null {
   if (!isAllowedEmail(email)) return null;
+  if (isFinanceReadOnlyEmail(email)) return "finance_readonly";
   if (isReadOnlyEmail(email)) return "readonly";
   return isAdminEmail(email) ? "admin" : "team";
 }
@@ -86,6 +94,7 @@ export function defaultLoginPassword() {
 
 const initialUserPasswords: Partial<Record<(typeof allowedTeamEmails)[number], string>> = {
   "margareth13105@gmail.com": "Growthive123",
+  "riko.yf@gmail.com": "Growthive123",
 };
 
 export async function passwordHash(email: string, password: string) {

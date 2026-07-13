@@ -48,7 +48,7 @@ export default function Dashboard() {
     fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
   }, []);
   const access = getUserAccess(email);
-  const canReadAll = access === "admin" || access === "readonly";
+  const canReadAll = access === "admin" || access === "readonly" || access === "finance_readonly";
   const currentMember = teamMembers.find((member) => member.email.toLowerCase() === email.toLowerCase()) || (access === "admin" ? teamMembers[0] : undefined);
   const allowedProjectKeywords = canReadAll ? [] : memberProjectKeywords(currentMember);
   const canSeeProjectName = (projectName: string) => canReadAll || textMatchesKeywords(projectName, allowedProjectKeywords);
@@ -205,10 +205,11 @@ export default function Dashboard() {
     );
   }
 
-  if (access === "readonly") {
+  if (access === "readonly" || access === "finance_readonly") {
+    const monitorName = access === "finance_readonly" ? "Riko" : "Gaby";
     return (
       <>
-        <Header title="Selamat pagi, Gaby" subtitle="Dashboard monitoring GrowthHive: client aktif, nilai project bulanan, dan performa keuangan terbaru." />
+        <Header title={`Selamat datang, ${monitorName}`} subtitle="Dashboard monitoring GrowthHive: client aktif, nilai project bulanan, dan performa keuangan terbaru." />
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {readOnlyStats.map(({ label, value, helper, icon: Icon }) => (
             <Card key={label} className="p-5">
