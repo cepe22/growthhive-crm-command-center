@@ -214,13 +214,7 @@ export default function ClientManagementPage() {
     return projects.filter((project) => canSeeProjectName(`${project.name} ${project.scope || ""}`));
   };
   const visibleActiveClients = activeClients.filter((client) => visibleClientProjects(client).length > 0);
-  const canSeeTask = (task: ProjectTask) => {
-    if (canReadAll) return true;
-    if (!currentMember) return false;
-    if ([task.assigneeId, task.assignedById, task.watcherId].includes(currentMember.id)) return true;
-    return canSeeProjectName(task.project);
-  };
-  const visibleProjectTasks = projectTasks.filter(canSeeTask);
+  const visibleProjectTasks = projectTasks;
   const taskClientNames = Array.from(new Set(visibleProjectTasks.map((task) => task.client || "Internal"))).sort((a, b) => {
     const activeClientOrder = visibleActiveClients.map((client) => client.brand);
     const indexA = activeClientOrder.indexOf(a);
