@@ -16,7 +16,9 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const hasGoogleConfig = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const hasGoogleConfig =
+    process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true" &&
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("error");
