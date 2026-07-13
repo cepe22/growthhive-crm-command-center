@@ -22,6 +22,13 @@ export type ClientProject = {
   notes?: string;
 };
 
+export type FollowUpEntry = {
+  id: string;
+  note: string;
+  createdAt: string;
+  author: string;
+};
+
 export type Client = {
   id: string;
   brand: string;
@@ -39,6 +46,7 @@ export type Client = {
   owner?: string;
   nextAction?: string;
   dueDate?: string;
+  followUpHistory?: FollowUpEntry[];
   projectStart?: string;
   health?: "Green" | "Amber" | "Red";
   notes?: string;

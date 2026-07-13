@@ -85,10 +85,11 @@ export default function CRMPage() {
   const [industry, setIndustry] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
+  const [followUpClient, setFollowUpClient] = useState<Client | null>(null);
   useEffect(() => {
     fetch("/api/session").then((response) => response.ok ? response.json() : null).then((data) => setEmail(data?.email || "")).catch(() => setEmail(""));
   }, []);
-  const canWrite = getUserAccess(email) !== "readonly";
+  const canWrite = getUserAccess(email) === "admin";
   const filtered = clients.filter((client) => {
     const haystack = `${client.brand} ${client.pic} ${projectNames(client)} ${projectScopes(client)} ${client.cooperationScope || ""} ${client.industry}`.toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!industry || client.industry === industry);
@@ -149,6 +150,7 @@ export default function CRMPage() {
       owner: String(data.get("owner")),
       nextAction: String(data.get("nextAction")),
       dueDate: String(data.get("dueDate")),
+      followUpHistory: editing?.followUpHistory || [],
       health: String(data.get("health")) as Client["health"],
     };
     if (editing) updateClient(editing.id, client);
@@ -167,6 +169,28 @@ export default function CRMPage() {
     if (!canWrite) return;
     setEditing(client);
     setOpen(true);
+  }
+
+  function submitFollowUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canWrite || !followUpClient) return;
+    const data = new FormData(event.currentTarget);
+    const response = String(data.get("response") || "").trim();
+    const nextAction = String(data.get("nextAction") || "").trim();
+    const dueDate = String(data.get("dueDate") || "");
+    const followUpHistory = response
+      ? [
+          ...(followUpClient.followUpHistory || []),
+          {
+            id: crypto.randomUUID(),
+            note: response,
+            createdAt: new Date().toISOString(),
+            author: "GrowthHive",
+          },
+        ]
+      : followUpClient.followUpHistory || [];
+    updateClient(followUpClient.id, { ...followUpClient, nextAction, dueDate, followUpHistory });
+    setFollowUpClient(null);
   }
 
   return (
@@ -210,14 +234,15 @@ export default function CRMPage() {
               .sort((a, b) => String(a.dueDate || "9999").localeCompare(String(b.dueDate || "9999")))
               .slice(0, 4)
               .map((client) => (
-                <div key={client.id} className="flex items-center gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
+                <button key={client.id} type="button" disabled={!canWrite} onClick={() => setFollowUpClient(client)} className={cn("flex w-full items-center gap-3 rounded-lg border border-slate-100 p-3 text-left transition dark:border-slate-800", canWrite && "hover:border-teal-200 hover:bg-teal-50/50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:border-teal-800 dark:hover:bg-teal-950/30")}>
                   <div className={cn("h-2.5 w-2.5 rounded-full", stageMeta[client.stage].accent)} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black">{client.brand}</p>
                     <p className="truncate text-xs text-slate-400">{client.nextAction || "Tentukan next action"}</p>
                   </div>
                   <span className="shrink-0 text-xs font-bold text-slate-500">{formatDate(client.dueDate)}</span>
-                </div>
+                  {canWrite && <Pencil className="shrink-0 text-teal-600" size={14} />}
+                </button>
               ))
             ) : (
               <div className="rounded-lg border border-dashed border-slate-200 p-4 text-sm font-bold text-slate-400 dark:border-slate-800">
@@ -463,6 +488,47 @@ export default function CRMPage() {
           </label>
           <Button className="md:col-span-2">{editing ? "Update Deal" : "Simpan Deal"}</Button>
         </form>
+      </Modal>
+
+      <Modal open={Boolean(followUpClient)} title={`Follow-up · ${followUpClient?.brand || ""}`} onClose={() => setFollowUpClient(null)}>
+        {followUpClient && (
+          <form onSubmit={submitFollowUp} className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800">
+              <span className={cn("rounded-full px-2.5 py-1 font-black", stageMeta[followUpClient.stage].tone)}>{followUpClient.stage}</span>
+              <span className="font-bold text-slate-500">PIC: {followUpClient.pic}</span>
+            </div>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Respons / hasil follow-up</span>
+              <textarea name="response" rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Contoh: Sudah menghubungi PIC, proposal sedang direview oleh tim mereka." />
+              <span className="mt-1.5 block text-[11px] text-slate-400">Kosongkan bila hanya ingin mengubah next action atau tanggal.</span>
+            </label>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Next action</span>
+              <input name="nextAction" defaultValue={followUpClient.nextAction || ""} className={fieldClass} placeholder="Tindakan berikutnya" />
+            </label>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Tanggal follow-up berikutnya</span>
+              <input name="dueDate" type="date" defaultValue={followUpClient.dueDate || ""} className={fieldClass} />
+            </label>
+            <Button className="w-full"><MessageSquareText size={15} /> Simpan Follow-up</Button>
+            {!!followUpClient.followUpHistory?.length && (
+              <section className="border-t border-slate-100 pt-5 dark:border-slate-800">
+                <h3 className="mb-3 text-xs font-black uppercase tracking-wider text-slate-400">Riwayat respons</h3>
+                <div className="max-h-56 space-y-2 overflow-auto">
+                  {followUpClient.followUpHistory.slice().reverse().map((item) => (
+                    <div key={item.id} className="rounded-lg border border-slate-100 p-3 dark:border-slate-800">
+                      <div className="mb-1 flex items-center justify-between gap-3 text-[11px]">
+                        <span className="font-black text-teal-700">{item.author}</span>
+                        <span className="text-slate-400">{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-xs leading-5 text-slate-600 dark:text-slate-300">{item.note}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </form>
+        )}
       </Modal>
     </>
   );
