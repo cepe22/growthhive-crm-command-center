@@ -78,14 +78,21 @@ export default function LoginPage() {
           <ShieldCheck size={22} />
         </div>
         <h1 className="text-2xl font-black text-ink dark:text-white">Masuk ke GrowthHive OS</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">Akses dibatasi untuk akun Google tim GrowthHive yang sudah terdaftar.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-400">Akses dibatasi untuk akun tim GrowthHive yang sudah terdaftar.</p>
         {error && <p className="mt-5 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">{error}</p>}
-        {hasGoogleConfig ? (
+        {hasGoogleConfig && (
           <Button onClick={loginWithGoogle} className="mt-7 h-12 w-full" disabled={loading}>
             <Chrome size={17} /> {loading ? "Menghubungkan..." : "Masuk dengan Google"}
           </Button>
-        ) : (
-          <form onSubmit={loginWithPassword} className="mt-7 space-y-4">
+        )}
+        {hasGoogleConfig && (
+          <div className="my-6 flex items-center gap-3 text-[10px] font-bold uppercase text-slate-400">
+            <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+            atau gunakan kata sandi
+            <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+          </div>
+        )}
+        <form onSubmit={loginWithPassword} className={hasGoogleConfig ? "space-y-4" : "mt-7 space-y-4"}>
             <label className="block">
               <span className="mb-2 block text-xs font-bold text-slate-500">Email</span>
               <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 px-4 dark:border-slate-700">
@@ -101,8 +108,7 @@ export default function LoginPage() {
               </div>
             </label>
             <Button className="h-12 w-full" disabled={loading}>{loading ? "Memproses..." : "Masuk"}</Button>
-          </form>
-        )}
+        </form>
       </div>
     </main>
   );
