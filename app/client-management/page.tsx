@@ -198,6 +198,7 @@ export default function ClientManagementPage() {
   const canReadAll = isAdmin || isReadOnly;
   const currentRoleRank = currentMember ? roleRank[currentMember.role] : Number.POSITIVE_INFINITY;
   const isSellina = currentMember?.id === "tm-sellina";
+  const hasChronosCreativeAccess = currentMember ? ["tm-sellina", "tm-xiu"].includes(currentMember.id) : false;
   const canCreateTask = Boolean(!isReadOnly && currentMember && (currentRoleRank <= 2 || isSellina));
   const canCreateEvent = Boolean(!isReadOnly && currentMember && currentRoleRank <= 2);
   const canMoveTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
@@ -229,8 +230,10 @@ export default function ClientManagementPage() {
     if (indexB === -1) return -1;
     return indexA - indexB;
   });
-  const projectOptions = Array.from(new Set(visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name))));
-  const clientOptions = visibleActiveClients.map((client) => client.brand);
+  const chronosClient = hasChronosCreativeAccess ? activeClients.find((client) => client.brand === "Chronos Time") : undefined;
+  const chronosProjectOptions = chronosClient ? getClientProjects(chronosClient).map((project) => project.name) : [];
+  const projectOptions = Array.from(new Set([...visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name)), ...chronosProjectOptions]));
+  const clientOptions = Array.from(new Set([...visibleActiveClients.map((client) => client.brand), ...(chronosClient ? [chronosClient.brand] : [])]));
   const eligibleAssignees = isSellina
     ? teamMembers.filter((member) => member.id === "tm-sellina" || member.id === "tm-xiu")
     : teamMembers.filter((member) => roleRank[member.role] > currentRoleRank);
