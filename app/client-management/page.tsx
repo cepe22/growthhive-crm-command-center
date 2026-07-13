@@ -180,7 +180,9 @@ export default function ClientManagementPage() {
   const isReadOnly = access === "readonly";
   const canReadAll = isAdmin || isReadOnly;
   const currentRoleRank = currentMember ? roleRank[currentMember.role] : Number.POSITIVE_INFINITY;
-  const canCreateTask = Boolean(!isReadOnly && currentMember && currentRoleRank <= 2);
+  const isSellina = currentMember?.id === "tm-sellina";
+  const canCreateTask = Boolean(!isReadOnly && currentMember && (currentRoleRank <= 2 || isSellina));
+  const canCreateEvent = Boolean(!isReadOnly && currentMember && currentRoleRank <= 2);
   const canMoveTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
   const canEditTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assignedById === currentMember.id);
   const canProgressTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
@@ -212,7 +214,9 @@ export default function ClientManagementPage() {
   });
   const projectOptions = Array.from(new Set(visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name))));
   const clientOptions = visibleActiveClients.map((client) => client.brand);
-  const eligibleAssignees = teamMembers.filter((member) => roleRank[member.role] > currentRoleRank);
+  const eligibleAssignees = isSellina
+    ? teamMembers.filter((member) => member.id === "tm-xiu")
+    : teamMembers.filter((member) => roleRank[member.role] > currentRoleRank);
   const eligibleWatchers = teamMembers.filter((member) => roleRank[member.role] >= currentRoleRank);
   const defaultAssigner = currentMember || teamMembers[0];
   const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
@@ -349,7 +353,7 @@ export default function ClientManagementPage() {
 
   function submitEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isReadOnly) return;
+    if (!canCreateEvent) return;
     const data = new FormData(event.currentTarget);
     const attendeeIds = data.getAll("attendeeIds").map(String);
     const ownerId = String(data.get("ownerId"));
@@ -549,9 +553,9 @@ export default function ClientManagementPage() {
             </button>
           ))}
         </div>
-        {canCreateTask && <div className="flex flex-wrap gap-2">
-          <Button onClick={openNewTask}><Plus size={16} />Task</Button>
-          <Button variant="outline" onClick={() => setEventModal(true)}><CalendarPlus size={16} />Event</Button>
+        {(canCreateTask || canCreateEvent) && <div className="flex flex-wrap gap-2">
+          {canCreateTask && <Button onClick={openNewTask}><Plus size={16} />Task</Button>}
+          {canCreateEvent && <Button variant="outline" onClick={() => setEventModal(true)}><CalendarPlus size={16} />Event</Button>}
         </div>}
       </section>
 
