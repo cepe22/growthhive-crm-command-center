@@ -246,7 +246,7 @@ export default function ClientManagementPage() {
   const projectOptions = Array.from(new Set(visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name))));
   const clientOptions = visibleActiveClients.map((client) => client.brand);
   const eligibleAssignees = isSellina
-    ? teamMembers.filter((member) => member.id === "tm-xiu")
+    ? teamMembers.filter((member) => member.id === "tm-sellina" || member.id === "tm-xiu")
     : teamMembers.filter((member) => roleRank[member.role] > currentRoleRank);
   const eligibleWatchers = teamMembers.filter((member) => roleRank[member.role] >= currentRoleRank);
   const defaultAssigner = currentMember || teamMembers[0];
