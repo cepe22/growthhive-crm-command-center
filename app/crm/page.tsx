@@ -31,6 +31,7 @@ import {
 import { FormEvent, useEffect, useState } from "react";
 
 const stageMeta: Record<Client["stage"], { tone: string; accent: string; label: string }> = {
+  "Cancelled / No Response": { tone: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-200", accent: "bg-rose-500", label: "Lost" },
   Leads: { tone: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200", accent: "bg-slate-400", label: "Capture" },
   "Discovery Call": { tone: "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-200", accent: "bg-sky-500", label: "Qualify" },
   "Pitching & Propose": { tone: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200", accent: "bg-indigo-500", label: "Propose" },
@@ -57,6 +58,8 @@ const serviceOptions = [
   "Shopee Ads Management",
   "Marketing Consulting",
 ];
+
+const inactivePipelineStages: Client["stage"][] = ["Cancelled / No Response", "Client (Active)", "Post-Client"];
 
 function formatDate(value?: string) {
   if (!value) return "Belum dijadwalkan";
@@ -94,14 +97,20 @@ export default function CRMPage() {
     const haystack = `${client.brand} ${client.pic} ${projectNames(client)} ${projectScopes(client)} ${client.cooperationScope || ""} ${client.industry}`.toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (!industry || client.industry === industry);
   });
-  const weightedPipeline = filtered.reduce((sum, client) => sum + getClientValue(client) * ((client.probability ?? 45) / 100), 0);
+  const openOpportunities = filtered.filter((client) => !inactivePipelineStages.includes(client.stage));
+  const weightedPipeline = openOpportunities.reduce((sum, client) => sum + getClientValue(client) * ((client.probability ?? 45) / 100), 0);
   const wonValue = filtered.filter((client) => client.stage === "Client (Active)" || client.stage === "Post-Client").reduce((sum, client) => sum + getClientValue(client), 0);
-  const openValue = filtered.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
-  const hotDeals = filtered.filter((client) => (client.priority ?? "Medium") === "High").length;
+  const openValue = openOpportunities.reduce((sum, client) => sum + getClientValue(client), 0);
+  const hotDeals = openOpportunities.filter((client) => (client.priority ?? "Medium") === "High").length;
   const conversionBase = filtered.filter((client) => client.stage !== "Leads").length || 1;
   const conversionRate = Math.round((filtered.filter((client) => ["Agreement Signed", "Client (Active)", "Post-Client"].includes(client.stage)).length / conversionBase) * 100);
   const industries = Array.from(new Set([...clients.map((client) => client.industry), "FnB", "Fitness & Wellness", "Fashion", "Beauty & Skincare", "Other"]));
   const maxStageValue = Math.max(...stages.map((stage) => filtered.filter((client) => client.stage === stage).reduce((sum, client) => sum + getClientValue(client), 0)), 1);
+  const nearestFollowUps = filtered
+    .filter((client) => client.stage !== "Cancelled / No Response")
+    .slice()
+    .sort((a, b) => String(a.dueDate || "9999").localeCompare(String(b.dueDate || "9999")))
+    .slice(0, 4);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -212,7 +221,7 @@ export default function CRMPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 min-[1540px]:grid-cols-4">
-            <MetricCard icon={CircleDollarSign} label="Open Pipeline" value={rupiah(openValue)} helper={`${filtered.length} opportunity`} tone="teal" />
+            <MetricCard icon={CircleDollarSign} label="Open Pipeline" value={rupiah(openValue)} helper={`${openOpportunities.length} opportunity`} tone="teal" />
             <MetricCard icon={TrendingUp} label="Weighted Forecast" value={rupiah(weightedPipeline)} helper="Berdasarkan probability" tone="blue" />
             <MetricCard icon={Banknote} label="Won/Post Value" value={rupiah(wonValue)} helper="Active + post-client" tone="emerald" />
             <MetricCard icon={Target} label="Close Readiness" value={`${conversionRate}%`} helper={`${hotDeals} high priority deal`} tone="amber" />
@@ -228,12 +237,8 @@ export default function CRMPage() {
             <CalendarClock className="text-teal-600" size={20} />
           </div>
           <div className="space-y-3">
-            {filtered.length ? (
-              filtered
-              .slice()
-              .sort((a, b) => String(a.dueDate || "9999").localeCompare(String(b.dueDate || "9999")))
-              .slice(0, 4)
-              .map((client) => (
+            {nearestFollowUps.length ? (
+              nearestFollowUps.map((client) => (
                 <button key={client.id} type="button" disabled={!canWrite} onClick={() => setFollowUpClient(client)} className={cn("flex w-full items-center gap-3 rounded-lg border border-slate-100 p-3 text-left transition dark:border-slate-800", canWrite && "hover:border-teal-200 hover:bg-teal-50/50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:border-teal-800 dark:hover:bg-teal-950/30")}>
                   <div className={cn("h-2.5 w-2.5 rounded-full", stageMeta[client.stage].accent)} />
                   <div className="min-w-0 flex-1">
@@ -402,7 +407,7 @@ export default function CRMPage() {
             <UsersRound className="text-teal-600" size={20} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <JourneyTile icon={MessageSquareText} label="Lead to Customer" value={filtered.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).length} helper="Prospecting sampai signed" />
+            <JourneyTile icon={MessageSquareText} label="Lead to Customer" value={openOpportunities.length} helper="Prospecting sampai signed" />
             <JourneyTile icon={MailCheck} label="Customer Success" value={filtered.filter((client) => client.stage === "Client (Active)").length} helper="Delivery dan review" />
             <JourneyTile icon={CheckCircle2} label="Post-Customer" value={filtered.filter((client) => client.stage === "Post-Client").length} helper="Testimonial, upsell, referral" />
           </div>
@@ -468,7 +473,7 @@ export default function CRMPage() {
           </label>
           <label>
             <span className="mb-2 block text-xs font-bold">Journey Stage</span>
-            <select name="stage" defaultValue={editing?.stage || stages[0]} className={fieldClass}>{stages.map((item) => <option key={item}>{item}</option>)}</select>
+            <select name="stage" defaultValue={editing?.stage || "Leads"} className={fieldClass}>{stages.map((item) => <option key={item}>{item}</option>)}</select>
           </label>
           <label>
             <span className="mb-2 block text-xs font-bold">Priority</span>

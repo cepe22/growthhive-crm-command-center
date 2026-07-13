@@ -1,4 +1,5 @@
 export const stages = [
+  "Cancelled / No Response",
   "Leads",
   "Discovery Call",
   "Pitching & Propose",

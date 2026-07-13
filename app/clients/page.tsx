@@ -9,6 +9,7 @@ import { rupiah } from "@/lib/utils";
 import { BriefcaseBusiness, CircleDollarSign, HeartPulse, Target } from "lucide-react";
 
 const stageTone: Record<Client["stage"], "teal" | "amber" | "red" | "slate"> = {
+  "Cancelled / No Response": "red",
   Leads: "slate",
   "Discovery Call": "slate",
   "Pitching & Propose": "amber",

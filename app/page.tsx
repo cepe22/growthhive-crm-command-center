@@ -61,7 +61,7 @@ export default function Dashboard() {
   });
   const total = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const paid = invoices.filter((invoice) => invoice.status === "Lunas").reduce((sum, invoice) => sum + invoice.amount, 0);
-  const openPipeline = clients.filter((client) => !["Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
+  const openPipeline = clients.filter((client) => !["Cancelled / No Response", "Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
   const visibleActiveProjects = visibleProjectTasks.filter((task) => task.status !== "Done").length;
   const today = new Date().toISOString().slice(0, 10);
   const acceptedEvents = calendarEvents.filter((event) => Object.values(event.responses).some((response) => response === "Accepted")).length;
@@ -101,7 +101,7 @@ export default function Dashboard() {
 
   const upcomingItems = [
     ...clients
-      .filter((client) => client.dueDate && client.nextAction)
+      .filter((client) => client.stage !== "Cancelled / No Response" && client.dueDate && client.nextAction)
       .map((client) => ({
         id: `crm-${client.id}`,
         type: "Follow-up",
