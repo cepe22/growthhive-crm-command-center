@@ -31,6 +31,9 @@ export type ProjectTask = {
   dueDate: string;
   priority: ProjectPriority;
   description?: string;
+  attachmentImage?: string;
+  attachmentFileName?: string;
+  attachmentLink?: string;
   progressUpdates?: TaskProgressUpdate[];
   comments?: TaskComment[];
   notificationLog?: string[];

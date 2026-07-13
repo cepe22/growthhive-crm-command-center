@@ -30,6 +30,8 @@ import {
   ChevronRight,
   Clock3,
   Columns3,
+  ExternalLink,
+  ImageIcon,
   Lock,
   Mail,
   MessageSquareText,
@@ -136,6 +138,32 @@ function textMatchesKeywords(value: string, keywords: string[]) {
   return keywords.some((keyword) => normalized.includes(keyword));
 }
 
+async function compressTaskImage(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("Attachment harus berupa file gambar.");
+  const source = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Gambar attachment tidak dapat dibaca."));
+    };
+    image.src = url;
+  });
+  const maxSize = 1400;
+  const scale = Math.min(1, maxSize / Math.max(source.width, source.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Gambar attachment tidak dapat diproses.");
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.76);
+}
+
 function memberProjectKeywords(member?: TeamMember) {
   if (!member) return [];
   if (member.id === "tm-inaya" || member.id === "tm-sellina") return socialMediaKeywords;
@@ -169,6 +197,9 @@ export default function ClientManagementPage() {
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [progressTask, setProgressTask] = useState<ProjectTask | null>(null);
   const [commentTask, setCommentTask] = useState<ProjectTask | null>(null);
+  const [attachmentPreviewTask, setAttachmentPreviewTask] = useState<ProjectTask | null>(null);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [submittingTask, setSubmittingTask] = useState(false);
   const [selectedDate, setSelectedDate] = useState(today());
   const [currentEmail, setCurrentEmail] = useState("");
 
@@ -306,14 +337,25 @@ export default function ClientManagementPage() {
   function openNewTask() {
     if (!canCreateTask) return;
     setEditingTask(null);
+    setAttachmentError("");
     setTaskModal(true);
   }
 
-  function submitTask(event: FormEvent<HTMLFormElement>) {
+  async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreateTask || !currentMember) return;
+    if (!canCreateTask || !currentMember || submittingTask) return;
     if (editingTask && !canEditTask(editingTask)) return;
+    setSubmittingTask(true);
+    setAttachmentError("");
     const data = new FormData(event.currentTarget);
+    const attachment = data.get("attachmentImage");
+    let attachmentImage = editingTask?.attachmentImage || "";
+    let attachmentFileName = editingTask?.attachmentFileName || "";
+    try {
+      if (attachment instanceof File && attachment.size > 0) {
+        attachmentImage = await compressTaskImage(attachment);
+        attachmentFileName = attachment.name;
+      }
     const previousAssigneeId = editingTask?.assigneeId;
     const nextAssigneeId = String(data.get("assigneeId"));
     const assignmentLogKey = `assigned-${nextAssigneeId}-${Date.now()}`;
@@ -330,6 +372,9 @@ export default function ClientManagementPage() {
       dueDate: String(data.get("dueDate")),
       priority: String(data.get("priority")) as ProjectPriority,
       description: String(data.get("description")),
+      attachmentImage,
+      attachmentFileName,
+      attachmentLink: String(data.get("attachmentLink") || ""),
       progressUpdates: editingTask?.progressUpdates || [],
       comments: editingTask?.comments || [],
       notificationLog: editingTask?.notificationLog || [],
@@ -349,6 +394,11 @@ export default function ClientManagementPage() {
     }
     setTaskModal(false);
     setEditingTask(null);
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : "Attachment tidak dapat diproses.");
+    } finally {
+      setSubmittingTask(false);
+    }
   }
 
   function submitEvent(event: FormEvent<HTMLFormElement>) {
@@ -576,7 +626,7 @@ export default function ClientManagementPage() {
                   <span className="ml-auto rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-900">{items.length}</span>
                 </div>
                 <div className="space-y-3">
-                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} canMove={canMoveTask(task)} canEdit={canEditTask(task)} canProgress={canProgressTask(task)} canComment={canCommentTask(task)} onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setTaskModal(true); }} onProgress={() => openProgress(task)} onComment={() => openComment(task)} onRemove={() => removeTask(task)} />)}
+                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} canMove={canMoveTask(task)} canEdit={canEditTask(task)} canProgress={canProgressTask(task)} canComment={canCommentTask(task)} onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setAttachmentError(""); setTaskModal(true); }} onProgress={() => openProgress(task)} onComment={() => openComment(task)} onImage={() => setAttachmentPreviewTask(task)} onRemove={() => removeTask(task)} />)}
                 </div>
               </div>
             );
@@ -628,6 +678,7 @@ export default function ClientManagementPage() {
                           onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setTaskModal(true); }}
                           onProgress={() => openProgress(task)}
                           onComment={() => openComment(task)}
+                          onImage={() => setAttachmentPreviewTask(task)}
                           onRemove={() => removeTask(task)}
                         />
                       ))}
@@ -764,7 +815,7 @@ export default function ClientManagementPage() {
         </section>
       )}
 
-      <Modal open={taskModal} title={editingTask ? "Edit Task" : "Tambah Task"} onClose={() => { setTaskModal(false); setEditingTask(null); }}>
+      <Modal open={taskModal} title={editingTask ? "Edit Task" : "Tambah Task"} onClose={() => { setTaskModal(false); setEditingTask(null); setAttachmentError(""); }}>
         <form onSubmit={submitTask} className="space-y-4">
           <input name="title" required defaultValue={editingTask?.title || ""} className={fieldClass} placeholder="Nama task" />
           <div className="grid gap-3 md:grid-cols-2">
@@ -803,10 +854,31 @@ export default function ClientManagementPage() {
             <select name="watcherId" defaultValue={editingTask?.watcherId || defaultAssigner?.id} className={fieldClass}>{eligibleWatchers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
           </label>
           <textarea name="description" defaultValue={editingTask?.description || ""} rows={4} className={`${fieldClass} h-auto py-3`} placeholder="Catatan singkat" />
+          <div className="grid gap-3 md:grid-cols-2">
+            <label>
+              <span className="mb-2 block text-xs font-bold">Upload gambar</span>
+              <input name="attachmentImage" type="file" accept="image/*" className={`${fieldClass} cursor-pointer py-2`} />
+              {editingTask?.attachmentFileName && <span className="mt-2 block truncate text-[11px] text-slate-400">Tersimpan: {editingTask.attachmentFileName}</span>}
+            </label>
+            <label>
+              <span className="mb-2 block text-xs font-bold">Link referensi</span>
+              <input name="attachmentLink" type="url" defaultValue={editingTask?.attachmentLink || ""} className={fieldClass} placeholder="https://..." />
+            </label>
+          </div>
+          <p className="text-[11px] leading-5 text-slate-400">Gambar dan link bersifat opsional. Upload gambar baru saat edit untuk mengganti gambar sebelumnya.</p>
+          {attachmentError && <p className="rounded-lg bg-rose-50 p-3 text-xs font-bold text-rose-700">{attachmentError}</p>}
           {!visibleActiveClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Belum ada client active yang sesuai dengan scope akses akun ini.</p>}
           <p className="rounded-lg bg-slate-50 p-3 text-xs font-bold text-slate-500 dark:bg-slate-800">Task hanya dapat diberikan ke role di bawah pemberi assign. Pengawas progress tidak dapat dipilih dari role yang lebih tinggi.</p>
-          <Button disabled={!taskProjectOptions.length || !taskClientOptions.length || !eligibleAssignees.length} className="w-full">Simpan Task</Button>
+          <Button disabled={submittingTask || !taskProjectOptions.length || !taskClientOptions.length || !eligibleAssignees.length} className="w-full">{submittingTask ? "Memproses Gambar..." : "Simpan Task"}</Button>
         </form>
+      </Modal>
+
+      <Modal open={Boolean(attachmentPreviewTask)} title={`Attachment · ${attachmentPreviewTask?.title || ""}`} onClose={() => setAttachmentPreviewTask(null)}>
+        {attachmentPreviewTask?.attachmentImage && <figure className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+          <img src={attachmentPreviewTask.attachmentImage} alt={`Attachment ${attachmentPreviewTask.title}`} className="max-h-[70vh] w-full bg-slate-50 object-contain dark:bg-slate-950" />
+          <figcaption className="p-3 text-xs font-bold text-slate-500">{attachmentPreviewTask.attachmentFileName || "Task attachment"}</figcaption>
+        </figure>}
+        {attachmentPreviewTask?.attachmentLink && <a href={attachmentPreviewTask.attachmentLink} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-black text-teal-600 hover:bg-teal-50 dark:border-slate-700"><ExternalLink size={15} />Buka link referensi</a>}
       </Modal>
 
       <Modal open={progressModal} title={`Progress · ${progressTask?.title || ""}`} onClose={() => { setProgressModal(false); setProgressTask(null); }}>
@@ -898,6 +970,7 @@ function TaskCard({
   onEdit,
   onProgress,
   onComment,
+  onImage,
   onRemove,
 }: {
   task: ProjectTask;
@@ -913,6 +986,7 @@ function TaskCard({
   onEdit: () => void;
   onProgress: () => void;
   onComment: () => void;
+  onImage: () => void;
   onRemove: () => void;
 }) {
   const latestUpdate = task.progressUpdates?.slice().reverse()[0];
@@ -939,6 +1013,10 @@ function TaskCard({
       </div>
       {showMoveLock && !canMove && <div className="mt-3 inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-800"><Lock size={11} /> Board move dikunci untuk assignee</div>}
       <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-300">{task.description || "Belum ada catatan."}</p>
+      {(task.attachmentImage || task.attachmentLink) && <div className="mt-3 flex flex-wrap gap-2">
+        {task.attachmentImage && <button onClick={onImage} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-teal-50 px-2.5 text-[11px] font-black text-teal-700"><ImageIcon size={13} />Lihat gambar</button>}
+        {task.attachmentLink && <a href={task.attachmentLink} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 text-[11px] font-black text-sky-700"><ExternalLink size={13} />Buka link</a>}
+      </div>}
       {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{member.name}: </span>{latestUpdate.note}</div>}
       {latestComment && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800"><span className="font-black">{latestComment.authorId === member.id ? member.name : watcher.name}: </span>{latestComment.note}</div>}
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
