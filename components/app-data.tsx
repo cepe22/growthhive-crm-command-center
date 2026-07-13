@@ -55,6 +55,7 @@ const DataContext = createContext<AppData | null>(null);
 const activeClientSeedVersion = "gh-active-clients-2026-07-07-v2";
 const calendarCleanupVersion = "gh-calendar-cleanup-2026-07-07-v1";
 const teamEmailSyncVersion = "gh-team-email-sync-2026-07-13-v3";
+const taskCleanupVersion = "gh-task-cleanup-2026-07-13-v1";
 
 function mergeActiveGhClients(existing: Client[]) {
   const seededBrands = new Set(activeGhClients.map((client) => client.brand.toLowerCase()));
@@ -131,6 +132,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     });
     localStorage.setItem("gh-team-email-sync-version", teamEmailSyncVersion);
   }, [setTeamMembers]);
+
+  useEffect(() => {
+    if (localStorage.getItem("gh-task-cleanup-version") === taskCleanupVersion) return;
+    setProjectTasks([]);
+    setTaskNotifications([]);
+    localStorage.setItem("gh-project-tasks-v3", "[]");
+    localStorage.setItem("gh-task-notifications-v1", "[]");
+    localStorage.setItem("gh-task-cleanup-version", taskCleanupVersion);
+  }, [setProjectTasks, setTaskNotifications]);
 
   return (
     <DataContext.Provider
