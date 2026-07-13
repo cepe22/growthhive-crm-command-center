@@ -61,7 +61,6 @@ const priorityTone: Record<ProjectPriority, "red" | "amber" | "slate"> = {
   Low: "slate",
 };
 
-const reminderOffsets = new Set([3, 1, 0, -1]);
 const socialMediaKeywords = ["social media", "content", "production"];
 const adsMarketplaceKeywords = ["meta ads", "shopee", "tiktok", "marketplace", "ads growth", "ads management"];
 type ProjectHubView = "board" | "client-board" | "timeline" | "clients" | "calendar";
@@ -98,20 +97,6 @@ function daysBetween(start: string, end: string) {
   const startDate = new Date(`${start}T00:00:00`);
   const endDate = new Date(`${end}T00:00:00`);
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
-}
-
-function dayDistance(from: string, to: string) {
-  const fromDate = new Date(`${from}T00:00:00`);
-  const toDate = new Date(`${to}T00:00:00`);
-  return Math.round((toDate.getTime() - fromDate.getTime()) / 86400000);
-}
-
-function reminderLabel(distance: number) {
-  if (distance === 3) return "H-3";
-  if (distance === 1) return "H-1";
-  if (distance === 0) return "Hari H";
-  if (distance === -1) return "H+1";
-  return `${Math.abs(distance)} hari`;
 }
 
 function dateOffset(base: string, value: string) {
@@ -305,34 +290,6 @@ export default function ClientManagementPage() {
     addTaskNotification(notification);
     void sendTaskEmail(notification);
   }
-
-  function notifyTaskAssignee(task: ProjectTask, recipient: TeamMember, title: string, message: string, logKey: string) {
-    if (task.notificationLog?.includes(logKey)) return;
-    createTaskNotification(task, recipient, logKey.startsWith("reminder") ? "reminder" : "assigned", title, message);
-    updateProjectTask(task.id, { ...task, notificationLog: [...(task.notificationLog || []), logKey] });
-  }
-
-  useEffect(() => {
-    const currentDate = today();
-    projectTasks.forEach((task) => {
-      if (task.status === "Done") return;
-      const distance = dayDistance(currentDate, task.dueDate);
-      if (!reminderOffsets.has(distance)) return;
-      const logKey = `reminder-${currentDate}-${distance}`;
-      if (task.notificationLog?.includes(logKey)) return;
-      const assignee = memberById(task.assigneeId);
-      const progressCopy = task.progressUpdates?.length ? "Task belum selesai. Cek progress terakhir dan update status bila sudah ada perkembangan." : "Task belum selesai dan belum ada progress update tertulis.";
-      notifyTaskAssignee(
-        task,
-        assignee,
-        `[${reminderLabel(distance)}] Reminder task: ${task.title}`,
-        `${progressCopy}\n\nTask: ${task.title}\nProject: ${task.project}\nClient: ${task.client || "-"}\nDeadline: ${formatDate(task.dueDate)}`,
-        logKey,
-      );
-    });
-    // Reminder delivery is guarded by task.notificationLog to avoid duplicate notifications.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectTasks, teamMembers]);
 
   function openNewTask() {
     if (!canCreateTask) return;
