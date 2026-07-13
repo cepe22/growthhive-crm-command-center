@@ -182,6 +182,7 @@ export default function ClientManagementPage() {
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [progressTask, setProgressTask] = useState<ProjectTask | null>(null);
   const [commentTask, setCommentTask] = useState<ProjectTask | null>(null);
+  const [detailTask, setDetailTask] = useState<ProjectTask | null>(null);
   const [attachmentPreviewTask, setAttachmentPreviewTask] = useState<ProjectTask | null>(null);
   const [attachmentError, setAttachmentError] = useState("");
   const [submittingTask, setSubmittingTask] = useState(false);
@@ -583,7 +584,7 @@ export default function ClientManagementPage() {
                   <span className="ml-auto rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-900">{items.length}</span>
                 </div>
                 <div className="space-y-3">
-                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} canMove={canMoveTask(task)} canEdit={canEditTask(task)} canProgress={canProgressTask(task)} canComment={canCommentTask(task)} onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setAttachmentError(""); setTaskModal(true); }} onProgress={() => openProgress(task)} onComment={() => openComment(task)} onImage={() => setAttachmentPreviewTask(task)} onRemove={() => removeTask(task)} />)}
+                  {items.map((task) => <TaskCard key={task.id} task={task} member={memberById(task.assigneeId)} assigner={memberById(task.assignedById)} watcher={memberById(task.watcherId)} canMove={canMoveTask(task)} canEdit={canEditTask(task)} canProgress={canProgressTask(task)} canComment={canCommentTask(task)} onOpen={() => setDetailTask(task)} onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setAttachmentError(""); setTaskModal(true); }} onProgress={() => openProgress(task)} onComment={() => openComment(task)} onImage={() => setAttachmentPreviewTask(task)} onRemove={() => removeTask(task)} />)}
                 </div>
               </div>
             );
@@ -632,6 +633,7 @@ export default function ClientManagementPage() {
                           canComment={canCommentTask(task)}
                           showStatus
                           showMoveLock={false}
+                          onOpen={() => setDetailTask(task)}
                           onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setTaskModal(true); }}
                           onProgress={() => openProgress(task)}
                           onComment={() => openComment(task)}
@@ -662,7 +664,7 @@ export default function ClientManagementPage() {
               const offset = dateOffset(timeline.base, task.dueDate);
               const width = 1;
               return (
-                <div key={task.id} className="grid min-w-[860px] grid-cols-[230px_1fr] items-center gap-4">
+                <div key={task.id} role="button" tabIndex={0} onClick={() => setDetailTask(task)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setDetailTask(task); }} className="grid min-w-[860px] cursor-pointer grid-cols-[230px_1fr] items-center gap-4 rounded-lg p-2 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:bg-slate-800/60">
                   <div className="flex items-center gap-3">
                     <Avatar member={memberById(task.assigneeId)} />
                     <div className="min-w-0">
@@ -838,6 +840,26 @@ export default function ClientManagementPage() {
         {attachmentPreviewTask?.attachmentLink && <a href={attachmentPreviewTask.attachmentLink} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-black text-teal-600 hover:bg-teal-50 dark:border-slate-700"><ExternalLink size={15} />Buka link referensi</a>}
       </Modal>
 
+      <Modal open={Boolean(detailTask)} title={detailTask?.title || "Detail Task"} onClose={() => setDetailTask(null)}>
+        {detailTask && <div className="space-y-5">
+          <div className="flex flex-wrap gap-2"><Badge tone={detailTask.status === "Done" ? "teal" : detailTask.status === "In Progress" || detailTask.status === "Review" ? "amber" : "slate"}>{statusMeta[detailTask.status].label}</Badge><Badge tone={priorityTone[detailTask.priority]}>{detailTask.priority} priority</Badge></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailField label="Project" value={detailTask.project} />
+            <DetailField label="Client" value={detailTask.client || "Internal"} />
+            <DetailField label="Deadline" value={formatDate(detailTask.dueDate)} />
+            <DetailField label="Assigned by" value={memberById(detailTask.assignedById).name} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-100 p-3 dark:border-slate-800"><p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Assignee</p><Avatar member={memberById(detailTask.assigneeId)} /></div>
+            <div className="rounded-lg border border-slate-100 p-3 dark:border-slate-800"><p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Pengawas progress</p><Avatar member={memberById(detailTask.watcherId)} /></div>
+          </div>
+          <section><p className="mb-2 text-xs font-black uppercase tracking-wider text-slate-400">Catatan</p><div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-800 dark:text-slate-200"><LinkifiedText text={detailTask.description || "Belum ada catatan."} /></div></section>
+          {(detailTask.attachmentImage || detailTask.attachmentLink) && <section><p className="mb-2 text-xs font-black uppercase tracking-wider text-slate-400">Attachment</p><div className="flex flex-wrap gap-2">{detailTask.attachmentImage && <button onClick={() => { setAttachmentPreviewTask(detailTask); setDetailTask(null); }} className="inline-flex h-10 items-center gap-2 rounded-lg bg-teal-50 px-3 text-sm font-black text-teal-700"><ImageIcon size={15} />Lihat gambar</button>}{detailTask.attachmentLink && <a href={detailTask.attachmentLink} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-lg bg-sky-50 px-3 text-sm font-black text-sky-700"><ExternalLink size={15} />Buka link referensi</a>}</div></section>}
+          <TaskActivity title="Progress Update" items={detailTask.progressUpdates || []} memberById={memberById} tone="sky" />
+          <TaskActivity title="Komentar" items={detailTask.comments || []} memberById={memberById} tone="amber" />
+        </div>}
+      </Modal>
+
       <Modal open={progressModal} title={`Progress · ${progressTask?.title || ""}`} onClose={() => { setProgressModal(false); setProgressTask(null); }}>
         {progressTask && <form onSubmit={submitProgress} className="space-y-4">
           <div className="rounded-lg bg-teal-50 p-3 text-xs font-bold text-teal-800">Progress update ditulis oleh assignee: {memberById(progressTask.assigneeId).name}</div>
@@ -913,6 +935,20 @@ function Avatar({ member }: { member: TeamMember }) {
   return <div className="flex min-w-0 items-center gap-2"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg", member.color)}>{avatarEmoji[member.avatar]}</span><div className="min-w-0"><p className="truncate text-sm font-black">{member.name}</p><p className="truncate text-[11px] text-slate-400">{member.role}</p></div></div>;
 }
 
+function DetailField({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-slate-100 p-3 dark:border-slate-800"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-sm font-black">{value}</p></div>;
+}
+
+function LinkifiedText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return <>{parts.map((part, index) => part.match(/^https?:\/\//) ? <a key={`${part}-${index}`} href={part} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="break-all font-bold text-teal-600 underline decoration-teal-300 underline-offset-2">{part}</a> : <span key={`text-${index}`}>{part}</span>)}</>;
+}
+
+function TaskActivity({ title, items, memberById, tone }: { title: string; items: Array<{ id: string; authorId: string; date: string; note: string }>; memberById: (id: string) => TeamMember; tone: "sky" | "amber" }) {
+  if (!items.length) return null;
+  return <section><p className="mb-2 text-xs font-black uppercase tracking-wider text-slate-400">{title}</p><div className="space-y-2">{items.slice().reverse().map((item) => <div key={item.id} className={cn("rounded-lg p-3 text-sm", tone === "sky" ? "bg-sky-50 text-sky-900 dark:bg-sky-950 dark:text-sky-100" : "bg-amber-50 text-amber-900")}><div className="mb-1 flex items-center justify-between gap-3"><span className="font-black">{memberById(item.authorId).name}</span><span className="text-[10px] font-bold opacity-60">{formatDate(item.date)}</span></div><div className="whitespace-pre-wrap text-xs leading-5"><LinkifiedText text={item.note} /></div></div>)}</div></section>;
+}
+
 function TaskCard({
   task,
   member,
@@ -924,6 +960,7 @@ function TaskCard({
   canComment,
   showStatus = false,
   showMoveLock = true,
+  onOpen,
   onEdit,
   onProgress,
   onComment,
@@ -940,6 +977,7 @@ function TaskCard({
   canComment: boolean;
   showStatus?: boolean;
   showMoveLock?: boolean;
+  onOpen: () => void;
   onEdit: () => void;
   onProgress: () => void;
   onComment: () => void;
@@ -949,7 +987,7 @@ function TaskCard({
   const latestUpdate = task.progressUpdates?.slice().reverse()[0];
   const latestComment = task.comments?.slice().reverse()[0];
   return (
-    <article draggable={canMove} onDragStart={(event) => { if (!canMove) return; event.dataTransfer.setData("id", task.id); }} className={cn("animate-[fadeUp_.28s_ease-out] rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-900", canMove ? "cursor-grab" : "cursor-default")}>
+    <article draggable={canMove} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }} onDragStart={(event) => { if (!canMove) return; event.dataTransfer.setData("id", task.id); }} className={cn("animate-[fadeUp_.28s_ease-out] cursor-pointer rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-slate-900", canMove && "cursor-grab")}>
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h4 className="truncate text-sm font-black">{task.title}</h4>
@@ -957,10 +995,10 @@ function TaskCard({
           {showStatus && <div className="mt-2"><Badge tone={task.status === "Done" ? "teal" : task.status === "In Progress" || task.status === "Review" ? "amber" : "slate"}>{statusMeta[task.status].label}</Badge></div>}
         </div>
         <div className="flex gap-1">
-          <button onClick={onEdit} disabled={!canEdit} title={canEdit ? "Edit task" : "Hanya pemberi assign yang bisa edit"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" : "border-slate-100 text-slate-300")}><Pencil size={14} /></button>
-          <button onClick={onProgress} disabled={!canProgress} title={canProgress ? "Tambah progress" : "Hanya assignee yang bisa update progress"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canProgress ? "border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-sky-900 dark:hover:bg-sky-950" : "border-slate-100 text-slate-300")}><MessageSquarePlus size={14} /></button>
-          <button onClick={onComment} disabled={!canComment} title={canComment ? "Komentar PIC" : "Hanya pengawas/PIC yang bisa komentar"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canComment ? "border-amber-200 text-amber-600 hover:bg-amber-50" : "border-slate-100 text-slate-300")}><MessageSquareText size={14} /></button>
-          <button onClick={onRemove} disabled={!canEdit} title={canEdit ? "Hapus task" : "Hanya pemberi assign yang bisa hapus"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-rose-200 text-rose-500 hover:bg-rose-50" : "border-slate-100 text-slate-300")}><Trash2 size={14} /></button>
+          <button onClick={(event) => { event.stopPropagation(); onEdit(); }} disabled={!canEdit} title={canEdit ? "Edit task" : "Hanya pemberi assign yang bisa edit"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" : "border-slate-100 text-slate-300")}><Pencil size={14} /></button>
+          <button onClick={(event) => { event.stopPropagation(); onProgress(); }} disabled={!canProgress} title={canProgress ? "Tambah progress" : "Hanya assignee yang bisa update progress"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canProgress ? "border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-sky-900 dark:hover:bg-sky-950" : "border-slate-100 text-slate-300")}><MessageSquarePlus size={14} /></button>
+          <button onClick={(event) => { event.stopPropagation(); onComment(); }} disabled={!canComment} title={canComment ? "Komentar PIC" : "Hanya pengawas/PIC yang bisa komentar"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canComment ? "border-amber-200 text-amber-600 hover:bg-amber-50" : "border-slate-100 text-slate-300")}><MessageSquareText size={14} /></button>
+          <button onClick={(event) => { event.stopPropagation(); onRemove(); }} disabled={!canEdit} title={canEdit ? "Hapus task" : "Hanya pemberi assign yang bisa hapus"} className={cn("grid h-8 w-8 place-items-center rounded-lg border", canEdit ? "border-rose-200 text-rose-500 hover:bg-rose-50" : "border-slate-100 text-slate-300")}><Trash2 size={14} /></button>
         </div>
       </div>
       <Avatar member={member} />
@@ -969,10 +1007,10 @@ function TaskCard({
         <span>Pengawas {watcher.name}</span>
       </div>
       {showMoveLock && !canMove && <div className="mt-3 inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-400 dark:bg-slate-800"><Lock size={11} /> Board move dikunci untuk assignee</div>}
-      <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-300">{task.description || "Belum ada catatan."}</p>
+      <div className="mt-3 line-clamp-2 min-h-10 whitespace-pre-wrap text-xs leading-5 text-slate-500 dark:text-slate-300"><LinkifiedText text={task.description || "Belum ada catatan."} /></div>
       {(task.attachmentImage || task.attachmentLink) && <div className="mt-3 flex flex-wrap gap-2">
-        {task.attachmentImage && <button onClick={onImage} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-teal-50 px-2.5 text-[11px] font-black text-teal-700"><ImageIcon size={13} />Lihat gambar</button>}
-        {task.attachmentLink && <a href={task.attachmentLink} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 text-[11px] font-black text-sky-700"><ExternalLink size={13} />Buka link</a>}
+        {task.attachmentImage && <button onClick={(event) => { event.stopPropagation(); onImage(); }} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-teal-50 px-2.5 text-[11px] font-black text-teal-700"><ImageIcon size={13} />Lihat gambar</button>}
+        {task.attachmentLink && <a href={task.attachmentLink} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 text-[11px] font-black text-sky-700"><ExternalLink size={13} />Buka link</a>}
       </div>}
       {latestUpdate && <div className="mt-3 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-800 dark:bg-sky-950 dark:text-sky-200"><span className="font-black">{member.name}: </span>{latestUpdate.note}</div>}
       {latestComment && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800"><span className="font-black">{latestComment.authorId === member.id ? member.name : watcher.name}: </span>{latestComment.note}</div>}
