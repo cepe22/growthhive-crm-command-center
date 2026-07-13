@@ -56,6 +56,45 @@ const activeClientSeedVersion = "gh-active-clients-2026-07-07-v2";
 const calendarCleanupVersion = "gh-calendar-cleanup-2026-07-07-v1";
 const teamEmailSyncVersion = "gh-team-email-sync-2026-07-13-v3";
 const taskCleanupVersion = "gh-task-cleanup-2026-07-13-v1";
+const sharedPollInterval = 5000;
+
+type SharedProjectData = {
+  tasks: ProjectTask[];
+  notifications: TaskNotification[];
+};
+
+function readLocalArray<T>(key: string) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchSharedProjectData(): Promise<SharedProjectData> {
+  const response = await fetch("/api/shared-project-data", { cache: "no-store" });
+  if (!response.ok) throw new Error("Shared project data belum tersedia.");
+  return response.json();
+}
+
+async function writeSharedProjectData(payload: Partial<SharedProjectData>) {
+  const response = await fetch("/api/shared-project-data", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error("Shared project data gagal disimpan.");
+}
+
+async function deleteSharedProjectData(taskIds: string[], notificationIds: string[] = []) {
+  const response = await fetch("/api/shared-project-data", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ taskIds, notificationIds }),
+  });
+  if (!response.ok) throw new Error("Shared project data gagal dihapus.");
+}
 
 function mergeActiveGhClients(existing: Client[]) {
   const seededBrands = new Set(activeGhClients.map((client) => client.brand.toLowerCase()));
@@ -97,6 +136,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [reimbursements, setReimbursements] = useStoredState<Reimbursement[]>("gh-reimbursements-v1", []);
   const [reimbursementNotifications, setReimbursementNotifications] = useStoredState<ReimbursementNotification[]>("gh-reimbursement-notifications-v1", []);
   const [taskNotifications, setTaskNotifications] = useStoredState<TaskNotification[]>("gh-task-notifications-v1", []);
+  const sharedReady = useRef(false);
+  const pendingSharedWrites = useRef(0);
+
+  async function syncSharedProjectData(payload: Partial<SharedProjectData>) {
+    if (!sharedReady.current) return;
+    pendingSharedWrites.current += 1;
+    try {
+      await writeSharedProjectData(payload);
+    } catch {
+      // Local storage remains the offline fallback until the next successful sync.
+    } finally {
+      pendingSharedWrites.current -= 1;
+    }
+  }
 
   useEffect(() => {
     if (localStorage.getItem("gh-active-client-seed-version") === activeClientSeedVersion) return;
@@ -142,6 +195,84 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("gh-task-cleanup-version", taskCleanupVersion);
   }, [setProjectTasks, setTaskNotifications]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initializeSharedData() {
+      const localTasks = readLocalArray<ProjectTask>("gh-project-tasks-v3");
+      const localNotifications = readLocalArray<TaskNotification>("gh-task-notifications-v1");
+      try {
+        const remote = await fetchSharedProjectData();
+        const remoteTaskIds = new Set(remote.tasks.map((task) => task.id));
+        const remoteNotificationIds = new Set(remote.notifications.map((notification) => notification.id));
+        const tasksToImport = localTasks.filter((task) => !remoteTaskIds.has(task.id));
+        const notificationsToImport = localNotifications.filter((notification) => !remoteNotificationIds.has(notification.id));
+        if (tasksToImport.length || notificationsToImport.length) {
+          await writeSharedProjectData({ tasks: tasksToImport, notifications: notificationsToImport });
+        }
+        if (cancelled) return;
+        setProjectTasks([...remote.tasks, ...tasksToImport]);
+        setTaskNotifications([...remote.notifications, ...notificationsToImport]);
+        sharedReady.current = true;
+      } catch {
+        sharedReady.current = false;
+      }
+    }
+
+    void initializeSharedData();
+    const poll = window.setInterval(async () => {
+      if (!sharedReady.current || pendingSharedWrites.current) return;
+      try {
+        const remote = await fetchSharedProjectData();
+        if (cancelled) return;
+        setProjectTasks(remote.tasks);
+        setTaskNotifications(remote.notifications);
+      } catch {
+        // Keep the most recent local cache when the shared database is unreachable.
+      }
+    }, sharedPollInterval);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+    };
+  }, [setProjectTasks, setTaskNotifications]);
+
+  function saveSharedTasks(tasks: ProjectTask[]) {
+    const removedTaskIds = projectTasks.filter((task) => !tasks.some((item) => item.id === task.id)).map((task) => task.id);
+    setProjectTasks(tasks);
+    if (removedTaskIds.length && sharedReady.current) void deleteSharedProjectData(removedTaskIds);
+    void syncSharedProjectData({ tasks });
+  }
+
+  function addSharedTask(task: ProjectTask) {
+    setProjectTasks((items) => [task, ...items]);
+    void syncSharedProjectData({ tasks: [task] });
+  }
+
+  function updateSharedTask(id: string, task: ProjectTask) {
+    setProjectTasks((items) => items.map((item) => (item.id === id ? task : item)));
+    void syncSharedProjectData({ tasks: [task] });
+  }
+
+  function moveSharedTask(id: string, status: ProjectStatus) {
+    const current = projectTasks.find((task) => task.id === id);
+    if (!current) return;
+    const task = { ...current, status };
+    setProjectTasks((items) => items.map((item) => (item.id === id ? task : item)));
+    void syncSharedProjectData({ tasks: [task] });
+  }
+
+  function addSharedTaskNotification(notification: TaskNotification) {
+    setTaskNotifications((items) => [notification, ...items]);
+    void syncSharedProjectData({ notifications: [notification] });
+  }
+
+  function updateSharedTaskNotification(id: string, notification: TaskNotification) {
+    setTaskNotifications((items) => items.map((item) => (item.id === id ? notification : item)));
+    void syncSharedProjectData({ notifications: [notification] });
+  }
+
   return (
     <DataContext.Provider
       value={{
@@ -158,10 +289,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         addClient: (client) => setClients((items) => [...items, client]),
         updateClient: (id, client) => setClients((items) => items.map((item) => (item.id === id ? client : item))),
         moveClient: (id, stage) => setClients((items) => items.map((client) => (client.id === id ? { ...client, stage } : client))),
-        saveProjectTasks: setProjectTasks,
-        addProjectTask: (task) => setProjectTasks((items) => [task, ...items]),
-        updateProjectTask: (id, task) => setProjectTasks((items) => items.map((item) => (item.id === id ? task : item))),
-        moveProjectTask: (id, status) => setProjectTasks((items) => items.map((task) => (task.id === id ? { ...task, status } : task))),
+        saveProjectTasks: saveSharedTasks,
+        addProjectTask: addSharedTask,
+        updateProjectTask: updateSharedTask,
+        moveProjectTask: moveSharedTask,
         saveDailyWorkPlans: setDailyWorkPlans,
         addDailyWorkPlan: (plan) => setDailyWorkPlans((items) => [plan, ...items]),
         saveCalendarEvents: setCalendarEvents,
@@ -176,8 +307,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         deleteReimbursement: (id) => setReimbursements((items) => items.filter((item) => item.id !== id)),
         addReimbursementNotification: (notification) => setReimbursementNotifications((items) => [notification, ...items]),
         updateReimbursementNotification: (id, notification) => setReimbursementNotifications((items) => items.map((item) => (item.id === id ? notification : item))),
-        addTaskNotification: (notification) => setTaskNotifications((items) => [notification, ...items]),
-        updateTaskNotification: (id, notification) => setTaskNotifications((items) => items.map((item) => (item.id === id ? notification : item))),
+        addTaskNotification: addSharedTaskNotification,
+        updateTaskNotification: updateSharedTaskNotification,
       }}
     >
       {children}
