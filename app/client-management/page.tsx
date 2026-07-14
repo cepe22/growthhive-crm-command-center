@@ -197,9 +197,10 @@ export default function ClientManagementPage() {
   const isReadOnly = access === "readonly";
   const canReadAll = isAdmin || isReadOnly;
   const currentRoleRank = currentMember ? roleRank[currentMember.role] : Number.POSITIVE_INFINITY;
+  const canCreateSpecialistTask = currentMember ? ["tm-joshua", "tm-sellina"].includes(currentMember.id) : false;
   const isSellina = currentMember?.id === "tm-sellina";
   const hasChronosCreativeAccess = currentMember ? ["tm-sellina", "tm-xiu"].includes(currentMember.id) : false;
-  const canCreateTask = Boolean(!isReadOnly && currentMember && (currentRoleRank <= 2 || isSellina));
+  const canCreateTask = Boolean(!isReadOnly && currentMember && (currentRoleRank <= 2 || canCreateSpecialistTask));
   const canCreateEvent = Boolean(!isReadOnly && currentMember && currentRoleRank <= 2);
   const canMoveTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assigneeId === currentMember.id);
   const canEditTask = (task: ProjectTask) => Boolean(!isReadOnly && currentMember && task.assignedById === currentMember.id);
@@ -228,13 +229,19 @@ export default function ClientManagementPage() {
   const chronosProjectOptions = chronosClient ? getClientProjects(chronosClient).map((project) => project.name) : [];
   const projectOptions = Array.from(new Set([...visibleActiveClients.flatMap((client) => visibleClientProjects(client).map((project) => project.name)), ...chronosProjectOptions]));
   const clientOptions = Array.from(new Set([...visibleActiveClients.map((client) => client.brand), ...(chronosClient ? [chronosClient.brand] : [])]));
-  const eligibleAssignees = isSellina
-    ? teamMembers.filter((member) => member.id === "tm-sellina" || member.id === "tm-xiu")
-    : teamMembers.filter((member) => roleRank[member.role] > currentRoleRank);
+  const allActiveProjectOptions = Array.from(new Set(activeClients.flatMap((client) => getClientProjects(client).map((project) => project.name))));
+  const allActiveClientOptions = Array.from(new Set(activeClients.map((client) => client.brand)));
+  const eligibleAssignees = currentMember?.id === "tm-joshua"
+    ? teamMembers.filter((member) => ["tm-joshua", "tm-sellina"].includes(member.id))
+    : isSellina
+      ? teamMembers.filter((member) => ["tm-sellina", "tm-xiu"].includes(member.id))
+      : teamMembers.filter((member) => member.id === currentMember?.id || roleRank[member.role] > currentRoleRank);
   const eligibleWatchers = teamMembers.filter((member) => roleRank[member.role] >= currentRoleRank);
   const defaultAssigner = currentMember || teamMembers[0];
-  const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...projectOptions]));
-  const taskClientOptions = Array.from(new Set([...(editingTask?.client ? [editingTask.client] : []), ...clientOptions]));
+  const selectableProjectOptions = canCreateTask ? allActiveProjectOptions : projectOptions;
+  const selectableClientOptions = canCreateTask ? allActiveClientOptions : clientOptions;
+  const taskProjectOptions = Array.from(new Set([...(editingTask?.project ? [editingTask.project] : []), ...selectableProjectOptions]));
+  const taskClientOptions = Array.from(new Set([...(editingTask?.client ? [editingTask.client] : []), ...selectableClientOptions]));
   const activeTasks = visibleProjectTasks.filter((task) => task.status !== "Done");
   const dueThisWeek = visibleProjectTasks.filter((task) => {
     const distance = daysBetween(today(), task.dueDate);
@@ -823,8 +830,8 @@ export default function ClientManagementPage() {
           </div>
           <p className="text-[11px] leading-5 text-slate-400">Gambar dan link bersifat opsional. Upload gambar baru saat edit untuk mengganti gambar sebelumnya.</p>
           {attachmentError && <p className="rounded-lg bg-rose-50 p-3 text-xs font-bold text-rose-700">{attachmentError}</p>}
-          {!visibleActiveClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Belum ada client active yang sesuai dengan scope akses akun ini.</p>}
-          <p className="rounded-lg bg-slate-50 p-3 text-xs font-bold text-slate-500 dark:bg-slate-800">Task hanya dapat diberikan ke role di bawah pemberi assign. Pengawas progress tidak dapat dipilih dari role yang lebih tinggi.</p>
+          {!activeClients.length && <p className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-700">Belum ada client active yang dapat dipilih.</p>}
+          <p className="rounded-lg bg-slate-50 p-3 text-xs font-bold text-slate-500 dark:bg-slate-800">Task dapat diberikan kepada diri sendiri atau anggota tim yang diizinkan. Pengawas progress tidak dapat dipilih dari role yang lebih tinggi.</p>
           <Button disabled={submittingTask || !taskProjectOptions.length || !taskClientOptions.length || !eligibleAssignees.length} className="w-full">{submittingTask ? "Memproses Gambar..." : "Simpan Task"}</Button>
         </form>
       </Modal>
