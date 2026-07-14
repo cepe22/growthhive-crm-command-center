@@ -27,6 +27,7 @@ import {
   CalendarPlus,
   ChartGantt,
   Check,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   Columns3,
@@ -45,7 +46,7 @@ import {
   X,
   MessageSquarePlus,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 const statusMeta: Record<ProjectStatus, { label: string; accent: string; bg: string }> = {
   Backlog: { label: "Backlog", accent: "bg-slate-400", bg: "bg-slate-50 dark:bg-slate-950" },
@@ -464,6 +465,16 @@ export default function ClientManagementPage() {
     updateTaskNotification(notification.id, { ...notification, read: true });
   }
 
+  function shiftDetailTaskStatus(direction: -1 | 1) {
+    if (!detailTask || !canMoveTask(detailTask)) return;
+    const currentIndex = projectStatuses.indexOf(detailTask.status);
+    const nextIndex = Math.min(projectStatuses.length - 1, Math.max(0, currentIndex + direction));
+    const nextStatus = projectStatuses[nextIndex];
+    if (!nextStatus || nextStatus === detailTask.status) return;
+    moveProjectTask(detailTask.id, nextStatus);
+    setDetailTask({ ...detailTask, status: nextStatus });
+  }
+
   function respondToEvent(eventId: string, memberId: string, response: EventResponse) {
     saveCalendarEvents(calendarEvents.map((event) => event.id === eventId ? { ...event, responses: { ...event.responses, [memberId]: response } } : event));
   }
@@ -847,6 +858,10 @@ export default function ClientManagementPage() {
       <Modal open={Boolean(detailTask)} title={detailTask?.title || "Detail Task"} onClose={() => setDetailTask(null)}>
         {detailTask && <div className="space-y-5">
           <div className="flex flex-wrap gap-2"><Badge tone={detailTask.status === "Done" ? "teal" : detailTask.status === "In Progress" || detailTask.status === "Review" ? "amber" : "slate"}>{statusMeta[detailTask.status].label}</Badge><Badge tone={priorityTone[detailTask.priority]}>{detailTask.priority} priority</Badge></div>
+          {canMoveTask(detailTask) && <MobileStatusControl
+            status={detailTask.status}
+            onMove={shiftDetailTaskStatus}
+          />}
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailField label="Project" value={detailTask.project} />
             <DetailField label="Client" value={detailTask.client || "Internal"} />
@@ -941,6 +956,58 @@ function Avatar({ member }: { member: TeamMember }) {
 
 function DetailField({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border border-slate-100 p-3 dark:border-slate-800"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-sm font-black">{value}</p></div>;
+}
+
+function MobileStatusControl({
+  status,
+  onMove,
+}: {
+  status: ProjectStatus;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  const swipeStart = useRef<number | null>(null);
+  const currentIndex = projectStatuses.indexOf(status);
+  const previousStatus = projectStatuses[currentIndex - 1];
+  const nextStatus = projectStatuses[currentIndex + 1];
+
+  return (
+    <section
+      className="touch-pan-y rounded-lg border border-teal-100 bg-teal-50/70 p-3 dark:border-teal-900 dark:bg-teal-950/30 md:hidden"
+      onTouchStart={(event) => { swipeStart.current = event.changedTouches[0]?.clientX ?? null; }}
+      onTouchCancel={() => { swipeStart.current = null; }}
+      onTouchEnd={(event) => {
+        if (swipeStart.current === null) return;
+        const distance = (event.changedTouches[0]?.clientX ?? swipeStart.current) - swipeStart.current;
+        if (Math.abs(distance) >= 48) onMove(distance < 0 ? 1 : -1);
+        swipeStart.current = null;
+      }}
+    >
+      <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-300">Status pengerjaan</p>
+      <div className="grid min-h-14 grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+        <button
+          type="button"
+          disabled={!previousStatus}
+          onClick={() => onMove(-1)}
+          aria-label={previousStatus ? `Pindah ke ${previousStatus}` : "Tidak ada status sebelumnya"}
+          className="flex min-w-0 items-center justify-start gap-1 rounded-lg border border-teal-200 bg-white px-2 text-left text-xs font-black text-teal-700 disabled:cursor-not-allowed disabled:opacity-30 dark:border-teal-800 dark:bg-slate-900 dark:text-teal-200"
+        >
+          <ChevronLeft className="shrink-0" size={17} />
+          <span className="truncate">{previousStatus || status}</span>
+        </button>
+        <div className="grid min-w-24 place-items-center rounded-lg bg-teal-600 px-3 text-center text-xs font-black text-white">{statusMeta[status].label}</div>
+        <button
+          type="button"
+          disabled={!nextStatus}
+          onClick={() => onMove(1)}
+          aria-label={nextStatus ? `Pindah ke ${nextStatus}` : "Tidak ada status berikutnya"}
+          className="flex min-w-0 items-center justify-end gap-1 rounded-lg border border-teal-200 bg-white px-2 text-right text-xs font-black text-teal-700 disabled:cursor-not-allowed disabled:opacity-30 dark:border-teal-800 dark:bg-slate-900 dark:text-teal-200"
+        >
+          <span className="truncate">{nextStatus || status}</span>
+          <ChevronRight className="shrink-0" size={17} />
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function LinkifiedText({ text }: { text: string }) {
