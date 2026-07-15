@@ -40,6 +40,7 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  UserRound,
   UserRoundPlus,
   UsersRound,
   Video,
@@ -64,7 +65,7 @@ const priorityTone: Record<ProjectPriority, "red" | "amber" | "slate"> = {
 
 const socialMediaKeywords = ["social media", "content", "production"];
 const adsMarketplaceKeywords = ["meta ads", "shopee", "tiktok", "marketplace", "ads growth", "ads management"];
-type ProjectHubView = "board" | "client-board" | "timeline" | "clients" | "calendar";
+type ProjectHubView = "board" | "client-board" | "team-board" | "timeline" | "clients" | "calendar";
 
 const roleRank: Record<TeamRole, number> = {
   "PIC / Owner / Founder": 1,
@@ -567,6 +568,7 @@ export default function ClientManagementPage() {
           {[
             { id: "board", label: "Board", icon: Columns3 },
             { id: "client-board", label: "Client Board", icon: UsersRound },
+            { id: "team-board", label: "Team Board", icon: UserRound },
             { id: "timeline", label: "Timeline", icon: ChartGantt },
             { id: "clients", label: "Clients", icon: UsersRound },
             { id: "calendar", label: "Calendar", icon: CalendarDays },
@@ -662,6 +664,67 @@ export default function ClientManagementPage() {
               })}
             </div>
           )}
+        </section>
+      )}
+
+      {view === "team-board" && (
+        <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900">
+            <div>
+              <h2 className="font-black">Task Board per Assignee</h2>
+              <p className="text-xs text-slate-400">Kolom berdasarkan anggota tim, isi task diurutkan dari deadline terdekat.</p>
+            </div>
+            <Badge tone="teal">{visibleProjectTasks.length} task</Badge>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-4">
+            {teamMembers.map((member) => {
+              const items = visibleProjectTasks
+                .filter((task) => task.assigneeId === member.id)
+                .sort((a, b) => {
+                  if (a.status === "Done" && b.status !== "Done") return 1;
+                  if (a.status !== "Done" && b.status === "Done") return -1;
+                  return new Date(`${a.dueDate}T00:00:00`).getTime() - new Date(`${b.dueDate}T00:00:00`).getTime();
+                });
+              const activeCount = items.filter((task) => task.status !== "Done").length;
+              return (
+                <div key={member.id} className="min-h-[480px] w-[320px] shrink-0 rounded-lg bg-slate-50 p-3 dark:bg-slate-950">
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Avatar member={member} />
+                        <p className="mt-2 text-xs font-bold text-slate-400">{activeCount} active task</p>
+                      </div>
+                      <Badge tone="slate">{items.length}</Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {items.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        member={member}
+                        assigner={memberById(task.assignedById)}
+                        watcher={memberById(task.watcherId)}
+                        canMove={false}
+                        canEdit={canEditTask(task)}
+                        canProgress={canProgressTask(task)}
+                        canComment={canCommentTask(task)}
+                        showStatus
+                        showMoveLock={false}
+                        onOpen={() => setDetailTask(task)}
+                        onEdit={() => { if (!canEditTask(task)) return; setEditingTask(task); setTaskModal(true); }}
+                        onProgress={() => openProgress(task)}
+                        onComment={() => openComment(task)}
+                        onImage={() => setAttachmentPreviewTask(task)}
+                        onRemove={() => removeTask(task)}
+                      />
+                    ))}
+                    {!items.length && <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center text-xs font-bold text-slate-400 dark:border-slate-800 dark:bg-slate-900">Belum ada task.</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 
