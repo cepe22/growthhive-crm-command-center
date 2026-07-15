@@ -5,6 +5,7 @@ import {
   appCalendarEvents as initialCalendarEvents,
   dailyWorkPlans as initialDailyWorkPlans,
   projectTasks as initialProjectTasks,
+  stampProjectTaskCompletion,
   teamMembers as initialTeamMembers,
   type AppCalendarEvent,
   type DailyWorkPlan,
@@ -239,26 +240,29 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [setProjectTasks, setTaskNotifications]);
 
   function saveSharedTasks(tasks: ProjectTask[]) {
-    const removedTaskIds = projectTasks.filter((task) => !tasks.some((item) => item.id === task.id)).map((task) => task.id);
-    setProjectTasks(tasks);
+    const normalizedTasks = tasks.map((task) => stampProjectTaskCompletion(task));
+    const removedTaskIds = projectTasks.filter((task) => !normalizedTasks.some((item) => item.id === task.id)).map((task) => task.id);
+    setProjectTasks(normalizedTasks);
     if (removedTaskIds.length && sharedReady.current) void deleteSharedProjectData(removedTaskIds);
-    void syncSharedProjectData({ tasks });
+    void syncSharedProjectData({ tasks: normalizedTasks });
   }
 
   function addSharedTask(task: ProjectTask) {
-    setProjectTasks((items) => [task, ...items]);
-    void syncSharedProjectData({ tasks: [task] });
+    const normalizedTask = stampProjectTaskCompletion(task);
+    setProjectTasks((items) => [normalizedTask, ...items]);
+    void syncSharedProjectData({ tasks: [normalizedTask] });
   }
 
   function updateSharedTask(id: string, task: ProjectTask) {
-    setProjectTasks((items) => items.map((item) => (item.id === id ? task : item)));
-    void syncSharedProjectData({ tasks: [task] });
+    const normalizedTask = stampProjectTaskCompletion(task);
+    setProjectTasks((items) => items.map((item) => (item.id === id ? normalizedTask : item)));
+    void syncSharedProjectData({ tasks: [normalizedTask] });
   }
 
   function moveSharedTask(id: string, status: ProjectStatus) {
     const current = projectTasks.find((task) => task.id === id);
     if (!current) return;
-    const task = { ...current, status };
+    const task = stampProjectTaskCompletion({ ...current, status });
     setProjectTasks((items) => items.map((item) => (item.id === id ? task : item)));
     void syncSharedProjectData({ tasks: [task] });
   }

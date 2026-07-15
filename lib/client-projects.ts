@@ -37,6 +37,8 @@ export type ProjectTask = {
   progressUpdates?: TaskProgressUpdate[];
   comments?: TaskComment[];
   notificationLog?: string[];
+  doneAt?: string;
+  archivedAt?: string;
 };
 
 export type TaskProgressUpdate = {
@@ -96,6 +98,20 @@ export type AppCalendarEvent = {
 };
 
 export const projectStatuses: ProjectStatus[] = ["Backlog", "Scheduled", "In Progress", "Review", "Done"];
+export const projectTaskDoneRetentionMs = 7 * 24 * 60 * 60 * 1000;
+
+export function stampProjectTaskCompletion(task: ProjectTask, completedAt = new Date().toISOString()): ProjectTask {
+  if (task.status === "Done") return task.doneAt ? task : { ...task, doneAt: completedAt };
+  if (!task.doneAt) return task;
+  const { doneAt: _doneAt, ...activeTask } = task;
+  return activeTask;
+}
+
+export function isProjectTaskReadyToArchive(task: ProjectTask, now = Date.now()) {
+  if (task.status !== "Done" || !task.doneAt || task.archivedAt) return false;
+  const completedAt = new Date(task.doneAt).getTime();
+  return Number.isFinite(completedAt) && now - completedAt >= projectTaskDoneRetentionMs;
+}
 
 export const teamRoles: TeamRole[] = [
   "Project Manager",

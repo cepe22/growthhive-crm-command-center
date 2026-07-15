@@ -1,7 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { authCookies, getUserAccess, isAdminEmail, verifySessionToken } from "@/lib/auth";
-import { teamMembers, type ProjectTask, type TaskNotification } from "@/lib/client-projects";
+import {
+  isProjectTaskReadyToArchive,
+  stampProjectTaskCompletion,
+  teamMembers,
+  type ProjectTask,
+  type TaskNotification,
+} from "@/lib/client-projects";
 
 type SharedPayload = {
   tasks?: ProjectTask[];
@@ -55,6 +61,16 @@ async function readRows<T>(table: string): Promise<T[]> {
   return rows.map((row) => row.payload);
 }
 
+async function upsertTaskRows(tasks: ProjectTask[], updatedAt: string) {
+  if (!tasks.length) return;
+  const response = await sharedRequest("gh_project_tasks?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(tasks.map((task) => ({ id: task.id, payload: task, updated_at: updatedAt }))),
+  });
+  if (!response.ok) throw new Error(await response.text());
+}
+
 export async function GET() {
   const email = await requireUser();
   if (!email) return NextResponse.json({ error: "Session tidak valid." }, { status: 401 });
@@ -64,7 +80,26 @@ export async function GET() {
       readRows<ProjectTask>("gh_project_tasks"),
       readRows<TaskNotification>("gh_task_notifications"),
     ]);
-    return NextResponse.json({ tasks, notifications });
+    const now = new Date();
+    const updatedAt = now.toISOString();
+    const tasksToPersist: ProjectTask[] = [];
+    const visibleTasks: ProjectTask[] = [];
+
+    tasks.forEach((storedTask) => {
+      if (storedTask.archivedAt) return;
+      const task = stampProjectTaskCompletion(storedTask, updatedAt);
+      if (isProjectTaskReadyToArchive(task, now.getTime())) {
+        tasksToPersist.push({ ...task, archivedAt: updatedAt });
+        return;
+      }
+      if (task !== storedTask) tasksToPersist.push(task);
+      visibleTasks.push(task);
+    });
+
+    await upsertTaskRows(tasksToPersist, updatedAt);
+    const visibleTaskIds = new Set(visibleTasks.map((task) => task.id));
+    const visibleNotifications = notifications.filter((notification) => visibleTaskIds.has(notification.taskId));
+    return NextResponse.json({ tasks: visibleTasks, notifications: visibleNotifications });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal membaca task bersama." }, { status: 503 });
   }
@@ -75,10 +110,12 @@ export async function POST(request: Request) {
   if (!email) return NextResponse.json({ error: "Session tidak valid." }, { status: 401 });
   if (!["admin", "team"].includes(getUserAccess(email) || "")) return NextResponse.json({ error: "Akun ini hanya memiliki akses baca." }, { status: 403 });
   const payload = (await request.json()) as SharedPayload;
-  const requestedTasks = Array.isArray(payload.tasks) ? payload.tasks.filter((task) => task?.id).slice(0, 500) : [];
+  const updatedAt = new Date().toISOString();
+  const requestedTasks = Array.isArray(payload.tasks)
+    ? payload.tasks.filter((task) => task?.id).slice(0, 500).map((task) => stampProjectTaskCompletion(task, updatedAt))
+    : [];
   let tasks: ProjectTask[] = [];
   const notifications = Array.isArray(payload.notifications) ? payload.notifications.filter((item) => item?.id).slice(0, 2000) : [];
-  const updatedAt = new Date().toISOString();
   try {
     if (requestedTasks.length) {
       const response = await sharedRequest(`gh_project_tasks?id=in.(${requestedTasks.map((task) => encodeURIComponent(task.id)).join(",")})&select=payload`);
@@ -88,18 +125,12 @@ export async function POST(request: Request) {
       const memberId = memberIdForEmail(email);
       tasks = requestedTasks.filter((task) => {
         const existing = existingTasks.get(task.id);
+        if (existing?.archivedAt) return false;
         if (existing) return canWriteTask(email, existing);
         return isAdminEmail(email) || Boolean(memberId && task.assignedById === memberId);
       });
     }
-    if (tasks.length) {
-      const response = await sharedRequest("gh_project_tasks?on_conflict=id", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify(tasks.map((task) => ({ id: task.id, payload: task, updated_at: updatedAt }))),
-      });
-      if (!response.ok) throw new Error(await response.text());
-    }
+    await upsertTaskRows(tasks, updatedAt);
     if (notifications.length) {
       const response = await sharedRequest("gh_task_notifications?on_conflict=id", {
         method: "POST",
