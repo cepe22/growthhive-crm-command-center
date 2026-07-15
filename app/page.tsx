@@ -64,6 +64,22 @@ export default function Dashboard() {
   const openPipeline = clients.filter((client) => !["Cancelled / No Response", "Client (Active)", "Post-Client"].includes(client.stage)).reduce((sum, client) => sum + getClientValue(client), 0);
   const visibleActiveProjects = visibleProjectTasks.filter((task) => task.status !== "Done").length;
   const today = new Date().toISOString().slice(0, 10);
+  const myActiveTasks = currentMember
+    ? projectTasks.filter((task) => task.assigneeId === currentMember.id && task.status !== "Done")
+    : [];
+  const priorityOrder = { High: 0, Medium: 1, Low: 2 } as const;
+  const myUrgentTasks = [...myActiveTasks]
+    .sort((a, b) => {
+      const deadlineDifference = new Date(`${a.dueDate}T00:00:00`).getTime() - new Date(`${b.dueDate}T00:00:00`).getTime();
+      return deadlineDifference || priorityOrder[a.priority] - priorityOrder[b.priority];
+    })
+    .slice(0, 8);
+  const deadlinePeriods = [
+    { label: "Lewat deadline", count: myActiveTasks.filter((task) => daysUntil(today, task.dueDate) < 0).length, tone: "red" as const },
+    { label: "Hari ini", count: myActiveTasks.filter((task) => daysUntil(today, task.dueDate) === 0).length, tone: "amber" as const },
+    { label: "1-3 hari", count: myActiveTasks.filter((task) => { const distance = daysUntil(today, task.dueDate); return distance >= 1 && distance <= 3; }).length, tone: "amber" as const },
+    { label: "4-7 hari", count: myActiveTasks.filter((task) => { const distance = daysUntil(today, task.dueDate); return distance >= 4 && distance <= 7; }).length, tone: "slate" as const },
+  ];
   const acceptedEvents = calendarEvents.filter((event) => Object.values(event.responses).some((response) => response === "Accepted")).length;
   const activeClients = visibleActiveClients.length;
   const visibleReimbursements = access === "admin" ? reimbursements : reimbursements.filter((item) => item.requesterEmail === email);
@@ -87,7 +103,7 @@ export default function Dashboard() {
     { label: "Belum Terbayar", value: rupiah(total - paid), icon: Clock3 },
   ];
   const teamStats = [
-    { label: "Task Aktif", value: String(visibleActiveProjects), icon: BriefcaseBusiness },
+    { label: "Task Aktif Saya", value: String(myActiveTasks.length), icon: BriefcaseBusiness },
     { label: "Active Client", value: String(activeClients), icon: UsersRound },
     { label: "Event Disetujui", value: String(acceptedEvents), icon: CircleDollarSign },
     { label: "Reimbursement Proses", value: String(pendingReimbursements), icon: ReceiptText },
@@ -124,8 +140,6 @@ export default function Dashboard() {
       })),
   ].sort((a, b) => new Date(`${a.dueDate}T00:00:00`).getTime() - new Date(`${b.dueDate}T00:00:00`).getTime()).slice(0, 6);
 
-  const teamUpcomingItems = upcomingItems.filter((item) => item.type === "Task");
-
   if (access === "team") {
     return (
       <>
@@ -144,30 +158,38 @@ export default function Dashboard() {
           <Card className="overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 p-5">
               <div>
-                <h2 className="font-black">Task Terdekat</h2>
-                <p className="text-xs text-slate-400">Prioritas dari Project Hub berdasarkan deadline</p>
+                <h2 className="font-black">Pekerjaan Paling Urgent</h2>
+                <p className="text-xs text-slate-400">Hanya task yang di-assign kepadamu, diurutkan dari deadline terdekat</p>
               </div>
               <Link href="/client-management" className="text-xs font-bold text-teal-600">Project Hub</Link>
             </div>
-            {!teamUpcomingItems.length ? (
-              <EmptyState title="Belum ada task terjadwal" description="Task dari Project Hub akan muncul di sini ketika memiliki deadline." />
+            <div className="grid grid-cols-2 border-y border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/30 sm:grid-cols-4">
+              {deadlinePeriods.map((period) => (
+                <div key={period.label} className="border-b border-r border-slate-100 p-4 last:border-r-0 dark:border-slate-800 sm:border-b-0">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{period.label}</p>
+                  <div className="mt-2"><Badge tone={period.tone}>{period.count} task</Badge></div>
+                </div>
+              ))}
+            </div>
+            {!myUrgentTasks.length ? (
+              <EmptyState title="Belum ada pekerjaan aktif" description="Task yang di-assign kepadamu akan muncul di sini berdasarkan urutan deadline." />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {teamUpcomingItems.map((item) => {
-                  const Icon = item.icon;
-                  const distance = daysUntil(today, item.dueDate);
+                {myUrgentTasks.map((task) => {
+                  const distance = daysUntil(today, task.dueDate);
                   return (
-                    <Link key={item.id} href={item.href} className="flex flex-wrap items-center gap-4 p-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><Icon size={18} /></div>
+                    <Link key={task.id} href="/client-management" className="flex flex-wrap items-center gap-4 p-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><ListChecks size={18} /></div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge tone="teal">Task</Badge>
-                          <span className="text-xs font-bold text-slate-400">{item.dueDate}</span>
+                          <Badge tone={task.priority === "High" ? "red" : task.priority === "Medium" ? "amber" : "slate"}>{task.priority}</Badge>
+                          <Badge tone="slate">{task.status}</Badge>
+                          <span className="text-xs font-bold text-slate-400">{task.dueDate}</span>
                         </div>
-                        <p className="mt-2 truncate font-black text-ink dark:text-white">{item.title}</p>
-                        <p className="mt-1 truncate text-xs text-slate-400">{item.context}</p>
+                        <p className="mt-2 truncate font-black text-ink dark:text-white">{task.title}</p>
+                        <p className="mt-1 truncate text-xs text-slate-400">{task.project} · {task.client || "Internal"}</p>
                       </div>
-                      <Badge tone={distance < 0 ? "red" : distance <= 1 ? "amber" : "slate"}>{dueLabel(today, item.dueDate)}</Badge>
+                      <Badge tone={distance < 0 ? "red" : distance <= 3 ? "amber" : "slate"}>{dueLabel(today, task.dueDate)}</Badge>
                     </Link>
                   );
                 })}
