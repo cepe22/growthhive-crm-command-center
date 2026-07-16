@@ -98,7 +98,7 @@ export type AppCalendarEvent = {
 };
 
 export const projectStatuses: ProjectStatus[] = ["Backlog", "Scheduled", "In Progress", "Review", "Done"];
-export const projectTaskDoneRetentionMs = 7 * 24 * 60 * 60 * 1000;
+export const projectTaskDoneRetentionMs = 32 * 60 * 60 * 1000;
 
 export function stampProjectTaskCompletion(task: ProjectTask, completedAt = new Date().toISOString()): ProjectTask {
   if (task.status === "Done") return task.doneAt ? task : { ...task, doneAt: completedAt };
